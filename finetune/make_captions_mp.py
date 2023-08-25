@@ -125,6 +125,14 @@ def _main(image_paths, args):
 
     # captioningする
     def run_batch(path_imgs):
+        new_path_imgs = []
+        for image_path, _ in path_imgs:
+            if not os.path.isfile(os.path.splitext(image_path)[0] + args.caption_extension):
+                new_path_imgs.append((image_path, _))
+        if not new_path_imgs:
+            return
+        path_imgs = new_path_imgs
+
         if args.model_name:
             if args.prompt:
                 imgs = processor([im for _, im in path_imgs], [args.prompt] * len(path_imgs), return_tensors="pt").to(
