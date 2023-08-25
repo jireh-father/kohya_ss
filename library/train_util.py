@@ -1108,6 +1108,15 @@ class BaseDataset(torch.utils.data.Dataset):
 
             # captionとtext encoder outputを処理する
             caption = image_info.caption  # default
+            if isinstance(caption, dict):
+                tags = caption['tags'] if 'tags' in caption else None
+                if len(caption['caption']) > 1:
+                    caption = random.choice(caption['caption'])
+                else:
+                    caption = caption['caption'][0]
+                if tags:
+                    caption = f"{caption}, {tags}"
+
             if image_info.text_encoder_outputs1 is not None:
                 text_encoder_outputs1_list.append(image_info.text_encoder_outputs1)
                 text_encoder_outputs2_list.append(image_info.text_encoder_outputs2)
@@ -1122,7 +1131,7 @@ class BaseDataset(torch.utils.data.Dataset):
                 text_encoder_pool2_list.append(text_encoder_pool2)
                 captions.append(caption)
             else:
-                caption = self.process_caption(subset, image_info.caption)
+                caption = self.process_caption(subset, caption)
                 if self.XTI_layers:
                     caption_layer = []
                     for layer in self.XTI_layers:
@@ -1506,11 +1515,17 @@ class FineTuningDataset(BaseDataset):
 
                 caption = img_md.get("caption")
                 tags = img_md.get("tags")
-                if caption is None:
-                    caption = tags
-                elif tags is not None and len(tags) > 0:
-                    caption = caption + ", " + tags
-                    tags_list.append(tags)
+                if isinstance(caption, list):
+                    caption = {"captions": caption}
+                    if tags:
+                        caption["tags"] = tags
+                        tags_list.append(tags)
+                else:
+                    if caption is None:
+                        caption = tags
+                    elif tags is not None and len(tags) > 0:
+                        caption = caption + ", " + tags
+                        tags_list.append(tags)
 
                 if caption is None:
                     caption = ""
