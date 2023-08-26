@@ -125,13 +125,13 @@ def _main(image_paths, args):
 
     # captioningする
     def run_batch(path_imgs):
-        new_path_imgs = []
-        for image_path, _ in path_imgs:
-            if not os.path.isfile(os.path.splitext(image_path)[0] + args.caption_extension):
-                new_path_imgs.append((image_path, _))
-        if not new_path_imgs:
-            return
-        path_imgs = new_path_imgs
+        # new_path_imgs = []
+        # for image_path, _ in path_imgs:
+        #     if not os.path.isfile(os.path.splitext(image_path)[0] + args.caption_extension):
+        #         new_path_imgs.append((image_path, _))
+        # if not new_path_imgs:
+        #     return
+        # path_imgs = new_path_imgs
 
         if args.model_name:
             if args.prompt:
@@ -185,6 +185,9 @@ def _main(image_paths, args):
                 continue
 
             img_tensor, image_path = data
+            # if os.path.isfile(os.path.splitext(image_path)[0] + args.caption_extension):
+            #     continue
+
             if img_tensor is None:
                 try:
                     raw_image = Image.open(image_path)
@@ -214,12 +217,12 @@ def _main(image_paths, args):
                     import traceback
                     traceback.print_exc()
                     print(f"Could not load image path / 画像を読み込めません: {image_path}, error: {e}")
-                    break
+                    continue
 
-            b_imgs.append((image_path, img_tensor))
-            if len(b_imgs) >= args.batch_size:
-                run_batch(b_imgs)
-                b_imgs.clear()
+                b_imgs.append((image_path, img_tensor))
+                if len(b_imgs) >= args.batch_size:
+                    run_batch(b_imgs)
+                    b_imgs.clear()
     if len(b_imgs) > 0:
         run_batch(b_imgs)
 
@@ -241,6 +244,9 @@ def main(args):
     train_data_dir_path = Path(args.train_data_dir)
     image_paths = train_util.glob_images_pathlib(train_data_dir_path, args.recursive)
     print(f"found {len(image_paths)} images.")
+
+    image_paths = [str(ip) for ip in image_paths if not os.path.isfile(os.path.splitext(ip)[0] + args.caption_extension)]
+    print("found {} images without caption".format(len(image_paths)))
 
     feed = slice_list(image_paths, args.num_processes)
 
