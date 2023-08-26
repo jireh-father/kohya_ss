@@ -250,7 +250,7 @@ def main(args):
     image_paths = train_util.glob_images_pathlib(train_data_dir_path, args.recursive)
     print(f"found {len(image_paths)} images.")
 
-    if args.args.output_dir:
+    if args.output_dir:
         os.makedirs(args.output_dir, exist_ok=True)
         image_paths = [str(ip) for ip in image_paths if not os.path.isfile(
             os.path.join(args.output_dir, os.path.splitext(os.path.basename(ip))[0] + args.caption_extension))]
