@@ -8,7 +8,7 @@ import glob
 def main(args):
   assert not args.recursive or (args.recursive and args.full_path), "recursive requires full_path / recursiveはfull_pathと同時に指定してください"
 
-  caption_files = glob.glob(os.path.join(args.train_data_dir, f"*.{args.caption_extension}"))
+  caption_files = glob.glob(os.path.join(args.train_data_dir, f"*{args.caption_extension}"))
   print(f"found {len(caption_files)} images.")
 
   if args.in_json is not None:
