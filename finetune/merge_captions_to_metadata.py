@@ -11,9 +11,6 @@ def main(args):
   caption_files = glob.glob(os.path.join(args.train_data_dir, f"*.{args.caption_extension}"))
   print(f"found {len(caption_files)} images.")
 
-  if args.in_json is None and Path(args.out_json).is_file():
-    args.in_json = args.out_json
-
   if args.in_json is not None:
     print(f"loading existing metadata: {args.in_json}")
     metadata = json.loads(Path(args.in_json).read_text(encoding='utf-8'))
