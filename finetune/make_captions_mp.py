@@ -158,7 +158,12 @@ def _main(image_paths, args):
                     )
 
         for (image_path, _), caption in zip(path_imgs, captions):
-            with open(os.path.splitext(image_path)[0] + args.caption_extension, "wt", encoding="utf-8") as f:
+            if args.output_dir:
+                output_path = os.path.join(args.output_dir,
+                                           os.path.splitext(os.path.basename(image_path))[0] + args.caption_extension)
+            else:
+                output_path = os.path.splitext(image_path)[0] + args.caption_extension
+            with open(output_path, "wt", encoding="utf-8") as f:
                 f.write(caption + "\n")
                 if args.debug:
                     print(image_path, caption)
@@ -245,7 +250,14 @@ def main(args):
     image_paths = train_util.glob_images_pathlib(train_data_dir_path, args.recursive)
     print(f"found {len(image_paths)} images.")
 
-    image_paths = [str(ip) for ip in image_paths if not os.path.isfile(os.path.splitext(ip)[0] + args.caption_extension)]
+    if args.args.output_dir:
+        os.makedirs(args.output_dir, exist_ok=True)
+        image_paths = [str(ip) for ip in image_paths if not os.path.isfile(
+            os.path.join(args.output_dir, os.path.splitext(os.path.basename(ip))[0] + args.caption_extension))]
+    else:
+        image_paths = [str(ip) for ip in image_paths if
+                       not os.path.isfile(os.path.splitext(ip)[0] + args.caption_extension)]
+
     print("found {} images without caption".format(len(image_paths)))
 
     feed = slice_list(image_paths, args.num_processes)
@@ -300,6 +312,7 @@ def setup_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max_length", type=int, default=75, help="max length of caption / captionの最大長")
     parser.add_argument("--min_length", type=int, default=5, help="min length of caption / captionの最小長")
     parser.add_argument("--prompt", type=str, default=None, help=None)
+    parser.add_argument("--output_dir", type=str, default=None, help=None)
     parser.add_argument("--seed", default=42, type=int,
                         help="seed for reproducibility / 再現性を確保するための乱数seed")
     parser.add_argument("--debug", action="store_true", help="debug mode")
@@ -312,6 +325,7 @@ def setup_parser() -> argparse.ArgumentParser:
 
 if __name__ == "__main__":
     import multiprocessing as mp
+
     mp.set_start_method("spawn", force=True)
     parser = setup_parser()
 
