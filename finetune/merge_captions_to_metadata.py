@@ -1,17 +1,15 @@
 import argparse
 import json
 from pathlib import Path
-from typing import List
 from tqdm import tqdm
-import library.train_util as train_util
 import os
+import glob
 
 def main(args):
   assert not args.recursive or (args.recursive and args.full_path), "recursive requires full_path / recursiveはfull_pathと同時に指定してください"
 
-  train_data_dir_path = Path(args.train_data_dir)
-  image_paths: List[Path] = train_util.glob_images_pathlib(train_data_dir_path, args.recursive)
-  print(f"found {len(image_paths)} images.")
+  caption_files = glob.glob(os.path.join(args.train_data_dir, f"*.{args.caption_extension}"))
+  print(f"found {len(caption_files)} images.")
 
   if args.in_json is None and Path(args.out_json).is_file():
     args.in_json = args.out_json
@@ -25,14 +23,10 @@ def main(args):
     metadata = {}
 
   print("merge caption texts to metadata json.")
-  for image_path in tqdm(image_paths):
-    caption_path = image_path.with_suffix(args.caption_extension)
-    caption = caption_path.read_text(encoding='utf-8').strip()
+  for caption_path in tqdm(caption_files):
+    caption = open(caption_path, encoding='utf-8').read().strip()
 
-    if not os.path.exists(caption_path):
-      caption_path = os.path.join(image_path, args.caption_extension)
-
-    image_key = str(image_path) if args.full_path else image_path.stem
+    image_key = os.path.splitext(os.path.basename(caption_path))[0]
     if image_key not in metadata:
       metadata[image_key] = {}
 
