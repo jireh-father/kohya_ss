@@ -224,10 +224,10 @@ def _main(image_paths, args):
                     print(f"Could not load image path / 画像を読み込めません: {image_path}, error: {e}")
                     continue
 
-                b_imgs.append((image_path, img_tensor))
-                if len(b_imgs) >= args.batch_size:
-                    run_batch(b_imgs)
-                    b_imgs.clear()
+            b_imgs.append((image_path, img_tensor))
+            if len(b_imgs) >= args.batch_size:
+                run_batch(b_imgs)
+                b_imgs.clear()
     if len(b_imgs) > 0:
         run_batch(b_imgs)
 
