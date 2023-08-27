@@ -134,11 +134,12 @@ def _main(image_paths, args):
         # path_imgs = new_path_imgs
 
         if args.model_name:
+            path_imgs = [path_item for path_item in path_imgs if not os.path.isfile(path_item[0])]
             if args.prompt:
-                imgs = processor([im for _, im in path_imgs], [args.prompt] * len(path_imgs), return_tensors="pt").to(
+                imgs = processor([im for cp, im in path_imgs], [args.prompt] * len(path_imgs), return_tensors="pt").to(
                     "cuda", torch.float16)
             else:
-                imgs = processor([im for _, im in path_imgs], return_tensors="pt").to("cuda", torch.float16)
+                imgs = processor([im for cp, im in path_imgs], return_tensors="pt").to("cuda", torch.float16)
         else:
             imgs = torch.stack([im for _, im in path_imgs]).to(DEVICE)
 
@@ -157,16 +158,13 @@ def _main(image_paths, args):
                         imgs, sample=True, top_p=args.top_p, max_length=args.max_length, min_length=args.min_length
                     )
 
-        for (image_path, _), caption in zip(path_imgs, captions):
-            if args.output_dir:
-                output_path = os.path.join(args.output_dir,
-                                           os.path.splitext(os.path.basename(image_path))[0] + args.caption_extension)
-            else:
-                output_path = os.path.splitext(image_path)[0] + args.caption_extension
+        for (output_path, _), caption in zip(path_imgs, captions):
+            if os.path.isfile(output_path):
+                continue
             with open(output_path, "wt", encoding="utf-8") as f:
                 f.write(caption + "\n")
                 if args.debug:
-                    print(image_path, caption)
+                    print(output_path, caption)
 
     # 読み込みの高速化のためにDataLoaderを使うオプション
     if args.max_data_loader_n_workers is not None:
@@ -190,8 +188,13 @@ def _main(image_paths, args):
                 continue
 
             img_tensor, image_path = data
-            # if os.path.isfile(os.path.splitext(image_path)[0] + args.caption_extension):
-            #     continue
+
+            if args.output_dir:
+                caption_path = os.path.join(args.output_dir, os.path.splitext(os.path.basename(image_path))[0] + args.caption_extension)
+            else:
+                caption_path = os.path.splitext(image_path)[0] + args.caption_extension
+            if os.path.isfile(caption_path):
+                continue
 
             if img_tensor is None:
                 try:
@@ -224,7 +227,7 @@ def _main(image_paths, args):
                     print(f"Could not load image path / 画像を読み込めません: {image_path}, error: {e}")
                     continue
 
-            b_imgs.append((image_path, img_tensor))
+            b_imgs.append((caption_path, img_tensor))
             if len(b_imgs) >= args.batch_size:
                 run_batch(b_imgs)
                 b_imgs.clear()
