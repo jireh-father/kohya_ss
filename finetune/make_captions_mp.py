@@ -249,6 +249,7 @@ def main(args):
     train_data_dir_path = Path(args.train_data_dir)
     image_paths = train_util.glob_images_pathlib(train_data_dir_path, args.recursive)
     print(f"found {len(image_paths)} images.")
+    random.shuffle(image_paths)
 
     if args.output_dir:
         os.makedirs(args.output_dir, exist_ok=True)
