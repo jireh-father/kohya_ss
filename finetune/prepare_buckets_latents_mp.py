@@ -295,6 +295,7 @@ def main(args):
         print("found {} images without npz".format(len(image_paths)))
 
     feed = slice_list(image_paths, args.num_processes)
+    print(f"feed {len(feed)} chunks to {args.num_processes} processes, each feed items: {len(feed[0])}")
 
     with Pool(args.num_processes) as pool:
         print("start multi processing")
