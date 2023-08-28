@@ -22,8 +22,8 @@ def main(args):
                     if data_key not in metadata[icon_id]:
                         metadata[icon_id][data_key] = []
                     caption = data[icon_id][data_key]
-                    # if "icon" not in caption:
-                    #     caption = f"a icon of {caption}"
+                    if "icon" not in caption:
+                        caption = f"a icon of {caption}"
                     metadata[icon_id][data_key].append(caption)
         elif json_file.endswith('.jsonl'):
             with open(json_file, 'r', encoding='utf-8') as f:
