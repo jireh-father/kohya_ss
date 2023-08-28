@@ -52,14 +52,12 @@ def get_npz_filename(data_dir, image_key, is_full_path=False, recursive=False):
         return os.path.join(data_dir, base_name) + ".npz"
 
 
-def _main(args):
+def _main(image_paths, args):
     # assert args.bucket_reso_steps % 8 == 0, f"bucket_reso_steps must be divisible by 8 / bucket_reso_stepは8で割り切れる必要があります"
     if args.bucket_reso_steps % 8 > 0:
         print(f"resolution of buckets in training time is a multiple of 8 / 学習時の各bucketの解像度は8単位になります")
 
-    train_data_dir_path = Path(args.train_data_dir)
-    image_paths: List[str] = [str(p) for p in train_util.glob_images_pathlib(train_data_dir_path, args.recursive)]
-    print(f"found {len(image_paths)} images.")
+    print(f"start {len(image_paths)} images.")
 
     if os.path.exists(args.in_json):
         print(f"loading existing metadata: {args.in_json}")
