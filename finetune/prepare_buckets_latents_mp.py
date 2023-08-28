@@ -127,7 +127,7 @@ def _main(feed, args):
 
         if args.min_bucket_reso == args.max_bucket_reso and args.skip_existing:
             reso = tuple([int(t) for t in args.max_resolution.split(",")])
-            npz_file_name = get_npz_filename(args.train_data_dir, image_key, args.full_path, args.recursive)
+            npz_file_name = get_npz_filename(args.output_dir, image_key, args.full_path, args.recursive)
             if train_util.is_disk_cached_latents_is_expected(reso, npz_file_name, args.flip_aug):
                 continue
 
@@ -153,7 +153,7 @@ def _main(feed, args):
 
         reso, resized_size, ar_error = bucket_manager.select_bucket(image.width, image.height)
 
-        npz_file_name = get_npz_filename(args.train_data_dir, image_key, args.full_path, args.recursive)
+        npz_file_name = get_npz_filename(args.output_dir, image_key, args.full_path, args.recursive)
         if args.skip_existing:
             if train_util.is_disk_cached_latents_is_expected(reso, npz_file_name, args.flip_aug):
                 continue
