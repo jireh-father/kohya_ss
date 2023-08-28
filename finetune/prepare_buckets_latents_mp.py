@@ -283,7 +283,6 @@ def main(args):
     train_data_dir_path = Path(args.train_data_dir)
     image_paths = train_util.glob_images_pathlib(train_data_dir_path, args.recursive, args.image_exts.split(",") if args.image_exts else None)
     print(f"found {len(image_paths)} images.")
-    random.shuffle(image_paths)
 
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -291,6 +290,8 @@ def main(args):
         reso = tuple([int(t) for t in args.max_resolution.split(",")])
         image_paths = [str(ip) for ip in image_paths if not train_util.is_disk_cached_latents_is_expected(reso, get_npz_filename(args.output_dir, os.path.splitext(os.path.basename(ip))[0]), args.flip_aug)]
         print("found {} images without npz".format(len(image_paths)))
+
+    random.shuffle(image_paths)
 
     feed = slice_list(image_paths, args.num_processes)
     print(f"feed {len(feed)} chunks to {args.num_processes} processes, each feed items: {len(feed[0])}")
