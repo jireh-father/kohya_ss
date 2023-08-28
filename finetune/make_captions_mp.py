@@ -136,10 +136,10 @@ def _main(image_paths, args):
         if args.model_name:
             path_imgs = [path_item for path_item in path_imgs if not os.path.isfile(path_item[0])]
             if args.prompt:
-                imgs = processor([im for cp, im in path_imgs], [args.prompt] * len(path_imgs), return_tensors="pt").to(
+                imgs = processor([im for _, im in path_imgs], [args.prompt] * len(path_imgs), return_tensors="pt").to(
                     "cuda", torch.float16)
             else:
-                imgs = processor([im for cp, im in path_imgs], return_tensors="pt").to("cuda", torch.float16)
+                imgs = processor([im for _, im in path_imgs], return_tensors="pt").to("cuda", torch.float16)
         else:
             imgs = torch.stack([im for _, im in path_imgs]).to(DEVICE)
 
