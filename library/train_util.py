@@ -2161,8 +2161,15 @@ def cache_batch_latents(
 
         image_infos = new_image_infos
 
+    new_image_infos = []
     for info in image_infos:
-        image = load_image(info.absolute_path) if info.image is None else np.array(info.image, np.uint8)
+        try:
+            image = load_image(info.absolute_path) if info.image is None else np.array(info.image, np.uint8)
+        except Exception as e:
+            print(f"error: failed to load image: {info.absolute_path}")
+            print(e)
+            continue
+        new_image_infos.append(info)
         # TODO 画像のメタデータが壊れていて、メタデータから割り当てたbucketと実際の画像サイズが一致しない場合があるのでチェック追加要
         image, original_size, crop_ltrb = trim_and_resize_if_required(random_crop, image, info.bucket_reso, info.resized_size)
         image = IMAGE_TRANSFORMS(image)
@@ -2170,6 +2177,7 @@ def cache_batch_latents(
 
         info.latents_original_size = original_size
         info.latents_crop_ltrb = crop_ltrb
+    image_infos = new_image_infos
 
     img_tensors = torch.stack(images, dim=0)
     img_tensors = img_tensors.to(device=vae.device, dtype=vae.dtype)
