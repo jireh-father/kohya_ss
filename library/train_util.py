@@ -2131,7 +2131,8 @@ def trim_and_resize_if_required(
 
 
 def cache_batch_latents(
-    vae: AutoencoderKL, cache_to_disk: bool, image_infos: List[ImageInfo], flip_aug: bool, random_crop: bool
+    vae: AutoencoderKL, cache_to_disk: bool, image_infos: List[ImageInfo], flip_aug: bool, random_crop: bool,
+        skip_existing:bool=False
 ) -> None:
     r"""
     requires image_infos to have: absolute_path, bucket_reso, resized_size, latents_npz
@@ -2143,6 +2144,19 @@ def cache_batch_latents(
     latents_original_size and latents_crop_ltrb are also set
     """
     images = []
+
+    if skip_existing:
+        # image_info.latents_npz = npz_file_name
+        # image_info.bucket_reso = reso
+        new_image_infos = []
+        for info in image_infos:
+            if not is_disk_cached_latents_is_expected(info.bucket_reso, info.latents_npz, flip_aug):
+                new_image_infos.append(info)
+        if not new_image_infos:
+            return
+
+        image_infos = new_image_infos
+
     for info in image_infos:
         image = load_image(info.absolute_path) if info.image is None else np.array(info.image, np.uint8)
         # TODO 画像のメタデータが壊れていて、メタデータから割り当てたbucketと実際の画像サイズが一致しない場合があるのでチェック追加要
