@@ -52,11 +52,12 @@ def get_npz_filename(data_dir, image_key, is_full_path=False, recursive=False):
         return os.path.join(data_dir, base_name) + ".npz"
 
 
-def _main(image_paths, args):
+def _main(feed, args):
     # assert args.bucket_reso_steps % 8 == 0, f"bucket_reso_steps must be divisible by 8 / bucket_reso_stepは8で割り切れる必要があります"
     if args.bucket_reso_steps % 8 > 0:
         print(f"resolution of buckets in training time is a multiple of 8 / 学習時の各bucketの解像度は8単位になります")
 
+    image_paths, process_id = feed
     print(f"start {len(image_paths)} images.")
 
     if os.path.exists(args.in_json):
@@ -123,6 +124,13 @@ def _main(image_paths, args):
 
         img_tensor, image_path = data_entry[0]
         image_key = image_path if args.full_path else os.path.splitext(os.path.basename(image_path))[0]
+
+        if args.min_bucket_reso == args.max_bucket_reso and args.skip_existing:
+            reso = tuple([int(t) for t in args.max_resolution.split(",")])
+            npz_file_name = get_npz_filename(args.train_data_dir, image_key, args.full_path, args.recursive)
+            if train_util.is_disk_cached_latents_is_expected(reso, npz_file_name, args.flip_aug):
+                continue
+
         if image_key not in metadata:
             metadata[image_key] = {}
 
@@ -194,8 +202,11 @@ def _main(image_paths, args):
     print(f"mean ar error: {np.mean(img_ar_errors)}")
 
     # metadataを書き出して終わり
-    print(f"writing metadata: {args.out_json}")
-    with open(args.out_json, "wt", encoding="utf-8") as f:
+    print(f"writing metadata: {args.out_json}, process_id: {process_id}")
+    output_splitext = os.path.splitext(args.out_json)
+
+    output_path = f"{output_splitext[0]}_{process_id}{output_splitext[1]}"
+    with open(output_path, "wt", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2)
     print("done!")
 
@@ -301,7 +312,7 @@ def main(args):
         # set default argument to download function using partial
 
         runner = functools.partial(_main, args=args)
-        pool.map(runner, feed)
+        pool.map(runner, zip(feed, list(range(len(feed)))))
 
 
 if __name__ == "__main__":
