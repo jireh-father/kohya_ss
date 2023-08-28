@@ -205,6 +205,7 @@ def _main(args):
 def setup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("train_data_dir", type=str, help="directory for train images / 学習画像データのディレクトリ")
+    parser.add_argument("image_exts", type=str, default='.png')
     parser.add_argument("in_json", type=str, help="metadata file to input / 読み込むメタデータファイル")
     parser.add_argument("out_json", type=str, help="metadata file to output / メタデータファイル書き出し先")
     parser.add_argument("model_name_or_path", type=str,
@@ -281,7 +282,7 @@ def slice_list(l, num_chunks):
 def main(args):
     print(f"load images from {args.train_data_dir}")
     train_data_dir_path = Path(args.train_data_dir)
-    image_paths = train_util.glob_images_pathlib(train_data_dir_path, args.recursive)
+    image_paths = train_util.glob_images_pathlib(train_data_dir_path, args.recursive, args.image_exts.split(",") if args.image_exts else None)
     print(f"found {len(image_paths)} images.")
     random.shuffle(image_paths)
 

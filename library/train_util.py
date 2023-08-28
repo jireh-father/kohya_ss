@@ -2006,16 +2006,20 @@ def glob_images(directory, base="*"):
     return img_paths
 
 
-def glob_images_pathlib(dir_path, recursive):
+def glob_images_pathlib(dir_path, recursive, image_exts=None):
     image_paths = []
-    if recursive:
-        for ext in IMAGE_EXTENSIONS:
-            image_paths += list(dir_path.rglob("*" + ext))
-    else:
-        for ext in IMAGE_EXTENSIONS:
+    if image_exts:
+        for ext in image_exts:
             image_paths += list(dir_path.glob("*" + ext))
-    image_paths = list(set(image_paths))  # 重複を排除
-    image_paths.sort()
+    else:
+        if recursive:
+            for ext in IMAGE_EXTENSIONS:
+                image_paths += list(dir_path.rglob("*" + ext))
+        else:
+            for ext in IMAGE_EXTENSIONS:
+                image_paths += list(dir_path.glob("*" + ext))
+        image_paths = list(set(image_paths))  # 重複を排除
+        image_paths.sort()
     return image_paths
 
 
