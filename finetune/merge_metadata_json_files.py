@@ -31,6 +31,12 @@ def main(args):
                     data = json.loads(line)
                     icon_id = os.path.splitext(data['file_name'])[0]
                     tags = data['text']
+                    if 'name: ' in tags:
+                        tags = tags.replace('name: ', '')
+                    if 'style: ' in tags:
+                        tags = tags.replace('style: ', '')
+                    if 'color: ' in tags:
+                        tags = tags.replace('color: ', '')
                     data_key = 'tags'
                     metadata[icon_id][data_key] = tags
 
