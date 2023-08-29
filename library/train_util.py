@@ -1110,10 +1110,10 @@ class BaseDataset(torch.utils.data.Dataset):
             caption = image_info.caption  # default
             if isinstance(caption, dict):
                 tags = caption['tags'] if 'tags' in caption else None
-                if len(caption['caption']) > 1:
-                    caption = random.choice(caption['caption'])
+                if len(caption['captions']) > 1:
+                    caption = random.choice(caption['captions'])
                 else:
-                    caption = caption['caption'][0]
+                    caption = caption['captions'][0]
                 if tags:
                     caption = f"{caption}, {tags}"
 
