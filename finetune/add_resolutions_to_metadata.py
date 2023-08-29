@@ -14,17 +14,6 @@ def main(args):
     for k in metadata:
         metadata[k]['train_resolution'] = [args.resolution, args.resolution]
 
-    json_files = glob.glob(args.in_jsons)
-    if not json_files:
-        json_files = args.in_jsons.split(',')
-        if args.in_json_root is not None:
-            json_files = [os.path.join(args.in_json_root, json_file) for json_file in json_files]
-
-    metadata = {}
-    for json_file in json_files:
-        data = json.loads(Path(json_file).read_text(encoding='utf-8'))
-        metadata.update(data)
-
     os.makedirs(os.path.dirname(args.out_json), exist_ok=True)
     # metadataを書き出して終わり
     print(f"writing metadata: {args.out_json}")
