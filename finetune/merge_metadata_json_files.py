@@ -46,7 +46,7 @@ def main(args):
 
     if args.skip_not_all:
         print("skip not all")
-        metadata = {icon_id: data for icon_id, data in metadata.items() if len(data['caption']) == num_jsons and (not is_jsonls or 'tags' in data)}
+        metadata = {icon_id: data for icon_id, data in metadata.items() if 'caption' in data and len(data['caption']) == num_jsons and (not is_jsonls or 'tags' in data)}
 
     os.makedirs(os.path.dirname(args.out_json), exist_ok=True)
     # metadataを書き出して終わり
