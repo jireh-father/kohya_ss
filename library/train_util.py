@@ -2169,6 +2169,7 @@ def cache_batch_latents(
             print(f"error: failed to load image: {info.absolute_path}")
             print(e)
             continue
+        print("image shape", image.shape)
         new_image_infos.append(info)
         # TODO 画像のメタデータが壊れていて、メタデータから割り当てたbucketと実際の画像サイズが一致しない場合があるのでチェック追加要
         image, original_size, crop_ltrb = trim_and_resize_if_required(random_crop, image, info.bucket_reso, info.resized_size)
