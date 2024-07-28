@@ -2023,6 +2023,26 @@ def glob_images_pathlib(dir_path, recursive, image_exts=None):
         image_paths.sort()
     return image_paths
 
+def glob_images_pathlib_check_txt(dir_path, recursive, image_exts=None):
+    image_paths = []
+    if image_exts:
+        for ext in image_exts:
+            image_paths += list(dir_path.glob("*" + ext))
+    else:
+        if recursive:
+            for ext in IMAGE_EXTENSIONS:
+                image_paths += list(dir_path.rglob("*" + ext))
+            txt_paths = list(dir_path.rglob("*.txt"))
+        else:
+            for ext in IMAGE_EXTENSIONS:
+                image_paths += list(dir_path.glob("*" + ext))
+            txt_paths = list(dir_path.glob("*.txt"))
+        txt_paths = [os.path.splitext(t)[0] for t in txt_paths]
+        image_paths = list(set(image_paths))  # 重複を排除
+        image_paths = [p for p in image_paths if os.path.splitext(p)[0] not in txt_paths]
+        image_paths.sort()
+    return image_paths
+
 
 class MinimalDataset(BaseDataset):
     def __init__(self, tokenizer, max_token_length, resolution, debug_dataset=False):

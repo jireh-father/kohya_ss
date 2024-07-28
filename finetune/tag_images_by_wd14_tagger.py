@@ -115,7 +115,9 @@ def main(args):
 
     train_data_dir_path = Path(args.train_data_dir)
     image_paths = train_util.glob_images_pathlib(train_data_dir_path, args.recursive)
-    print(f"found {len(image_paths)} images.")
+    print(f"original found {len(image_paths)} images.")
+    image_paths = train_util.glob_images_pathlib_check_txt(train_data_dir_path, args.recursive)
+    print(f"excepting txt. found {len(image_paths)} images.")
 
     tag_freq = {}
 
