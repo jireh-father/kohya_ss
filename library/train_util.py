@@ -1499,19 +1499,18 @@ class FineTuningDataset(BaseDataset):
                 abs_path = None
 
                 # まず画像を優先して探す
-                total_start = time.time()
                 if os.path.exists(image_key):
                     abs_path = image_key
                 else:
                     # わりといい加減だがいい方法が思いつかん
-                    start = time.time()
-                    paths = glob_images(subset.image_dir, image_key)
-                    print("glob time", time.time() - start)
-                    if len(paths) > 0:
-                        abs_path = paths[0]
-                print("total time", time.time() - total_start)
+                    jpg_path = os.path.join(subset.image_dir, image_key + ".jpg")
+                    if os.path.exists(jpg_path):
+                        abs_path = jpg_path
+                    else:
+                        paths = glob_images(subset.image_dir, image_key)
+                        if len(paths) > 0:
+                            abs_path = paths[0]
 
-                start = time.time()
                 # なければnpzを探す
                 if abs_path is None:
                     if os.path.exists(os.path.splitext(image_key)[0] + ".npz"):
@@ -1549,7 +1548,6 @@ class FineTuningDataset(BaseDataset):
                     image_info.latents_npz, image_info.latents_npz_flipped = self.image_key_to_npz_file(subset, image_key)
 
                 self.register_image(image_info, subset)
-                print("etc exec time", time.time() - start)
 
             self.num_train_images += len(metadata) * subset.num_repeats
             print("num train images", self.num_train_images)
