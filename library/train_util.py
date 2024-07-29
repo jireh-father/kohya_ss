@@ -1498,6 +1498,7 @@ class FineTuningDataset(BaseDataset):
                 abs_path = None
 
                 # まず画像を優先して探す
+                total_start = time.time()
                 if os.path.exists(image_key):
                     abs_path = image_key
                 else:
@@ -1507,6 +1508,7 @@ class FineTuningDataset(BaseDataset):
                     print("glob time", time.time() - start)
                     if len(paths) > 0:
                         abs_path = paths[0]
+                print("total time", time.time() - total_start)
 
                 start = time.time()
                 # なければnpzを探す
