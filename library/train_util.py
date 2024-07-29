@@ -1494,6 +1494,7 @@ class FineTuningDataset(BaseDataset):
             for meta_idx, (image_key, img_md) in enumerate(metadata.items()):
                 if meta_idx % 10 == 0:
                     print(f"processing metadata {meta_idx}/{len(metadata)}")
+                    print(subset.image_dir, image_key)
                 # path情報を作る
                 abs_path = None
 
