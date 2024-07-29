@@ -67,6 +67,7 @@ import library.sai_model_spec as sai_model_spec
 # from library.attention_processors import FlashAttnProcessor
 # from library.hypernetwork import replace_attentions_for_hypernetwork
 from library.original_unet import UNet2DConditionModel
+import time
 
 # Tokenizer: checkpointから読み込むのではなくあらかじめ提供されているものを使う
 TOKENIZER_PATH = "openai/clip-vit-large-patch14"
@@ -1501,10 +1502,13 @@ class FineTuningDataset(BaseDataset):
                     abs_path = image_key
                 else:
                     # わりといい加減だがいい方法が思いつかん
+                    start = time.time()
                     paths = glob_images(subset.image_dir, image_key)
+                    print("glob time", time.time() - start)
                     if len(paths) > 0:
                         abs_path = paths[0]
 
+                start = time.time()
                 # なければnpzを探す
                 if abs_path is None:
                     if os.path.exists(os.path.splitext(image_key)[0] + ".npz"):
@@ -1542,6 +1546,7 @@ class FineTuningDataset(BaseDataset):
                     image_info.latents_npz, image_info.latents_npz_flipped = self.image_key_to_npz_file(subset, image_key)
 
                 self.register_image(image_info, subset)
+                print("etc exec time", time.time() - start)
 
             self.num_train_images += len(metadata) * subset.num_repeats
             print("num train images", self.num_train_images)
