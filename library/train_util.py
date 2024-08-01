@@ -67,6 +67,7 @@ import library.sai_model_spec as sai_model_spec
 # from library.attention_processors import FlashAttnProcessor
 # from library.hypernetwork import replace_attentions_for_hypernetwork
 from library.original_unet import UNet2DConditionModel
+import time
 
 # Tokenizer: checkpointから読み込むのではなくあらかじめ提供されているものを使う
 TOKENIZER_PATH = "openai/clip-vit-large-patch14"
@@ -1481,6 +1482,7 @@ class FineTuningDataset(BaseDataset):
                 print(f"loading existing metadata: {subset.metadata_file}")
                 with open(subset.metadata_file, "rt", encoding="utf-8") as f:
                     metadata = json.load(f)
+                    print("loaded metadata.")
             else:
                 raise ValueError(f"no metadata / メタデータファイルがありません: {subset.metadata_file}")
 
@@ -1489,7 +1491,9 @@ class FineTuningDataset(BaseDataset):
                 continue
 
             tags_list = []
-            for image_key, img_md in metadata.items():
+            for meta_idx, (image_key, img_md) in enumerate(metadata.items()):
+                if meta_idx % 1000 == 0:
+                    print(f"processing metadata {meta_idx}/{len(metadata)}")
                 # path情報を作る
                 abs_path = None
 
@@ -1498,9 +1502,13 @@ class FineTuningDataset(BaseDataset):
                     abs_path = image_key
                 else:
                     # わりといい加減だがいい方法が思いつかん
-                    paths = glob_images(subset.image_dir, image_key)
-                    if len(paths) > 0:
-                        abs_path = paths[0]
+                    jpg_path = os.path.join(subset.image_dir, image_key + ".jpg")
+                    if os.path.exists(jpg_path):
+                        abs_path = jpg_path
+                    else:
+                        paths = glob_images(subset.image_dir, image_key)
+                        if len(paths) > 0:
+                            abs_path = paths[0]
 
                 # なければnpzを探す
                 if abs_path is None:
@@ -1541,6 +1549,7 @@ class FineTuningDataset(BaseDataset):
                 self.register_image(image_info, subset)
 
             self.num_train_images += len(metadata) * subset.num_repeats
+            print("num train images", self.num_train_images)
 
             # TODO do not record tag freq when no tag
             self.set_tag_frequency(os.path.basename(subset.metadata_file), tags_list)
