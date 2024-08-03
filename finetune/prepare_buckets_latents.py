@@ -55,7 +55,7 @@ def main(args):
 
     # train_data_dir_path = Path(args.train_data_dir)
     # image_paths: List[str] = [str(p) for p in train_util.glob_images_pathlib(train_data_dir_path, args.recursive)]
-    print(f"found {len(image_paths)} images.")
+    # print(f"found {len(image_paths)} images.")
 
     if os.path.exists(args.in_json):
         print(f"loading existing metadata: {args.in_json}")
