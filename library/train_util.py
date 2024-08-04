@@ -1393,6 +1393,7 @@ class DreamBoothDataset(BaseDataset):
         num_reg_images = 0
         reg_infos: List[ImageInfo] = []
         for subset in subsets:
+            print("subset", subset)
             if subset.num_repeats < 1:
                 print(
                     f"ignore subset with image_dir='{subset.image_dir}': num_repeats is less than 1 / num_repeatsが1を下回っているためサブセットを無視します: {subset.num_repeats}"
