@@ -194,8 +194,8 @@ def train(args):
                 state_dict = load_file(filename)
             else:
                 state_dict = torch.load(filename)
-            if not args.load_cn_model:
-                state_dict = model_util.convert_controlnet_state_dict_to_diffusers(state_dict)
+            # if not args.load_cn_model:
+            state_dict = model_util.convert_controlnet_state_dict_to_diffusers(state_dict)
             controlnet.load_state_dict(state_dict)
         elif os.path.isdir(filename):
             controlnet = ControlNetModel.from_pretrained(filename)
