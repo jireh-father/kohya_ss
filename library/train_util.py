@@ -1754,9 +1754,7 @@ class ControlNetDataset(BaseDataset):
 
             img_basename = os.path.basename(info.absolute_path)
             ctrl_img_path = os.path.join(subset.conditioning_data_dir, img_basename)
-            print(ctrl_img_path)
             if not os.path.exists(ctrl_img_path):
-                sys.exit("missing conditioning data: " + ctrl_img_path)
                 missing_imgs.append(img_basename)
 
             info.cond_img_path = ctrl_img_path

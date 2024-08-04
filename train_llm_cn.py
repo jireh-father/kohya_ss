@@ -181,6 +181,7 @@ def train(args):
             "upcast_attention": False,
             "resnet_time_scale_shift": "default",
             "projection_class_embeddings_input_dim": None,
+            "num_attention_heads": 16,
         }
     unet.config = SimpleNamespace(**unet.config)
 
