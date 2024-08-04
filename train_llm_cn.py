@@ -168,20 +168,20 @@ def train(args):
             "in_channels": 4,
             "layers_per_block": 2,
             "mid_block_scale_factor": 1,
+            "mid_block_type": "UNetMidBlock2DCrossAttn",
             "norm_eps": 1e-05,
             "norm_num_groups": 32,
+            "num_attention_heads": 8,
             "out_channels": 4,
             "sample_size": 64,
             "up_block_types": ["UpBlock2D", "CrossAttnUpBlock2D", "CrossAttnUpBlock2D", "CrossAttnUpBlock2D"],
             "only_cross_attention": False,
-            "downsample_padding": 1,
             "use_linear_projection": False,
             "class_embed_type": None,
             "num_class_embeds": None,
             "upcast_attention": False,
             "resnet_time_scale_shift": "default",
             "projection_class_embeddings_input_dim": None,
-            "num_attention_heads": 16,
         }
     unet.config = SimpleNamespace(**unet.config)
 
