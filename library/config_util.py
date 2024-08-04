@@ -551,7 +551,7 @@ def generate_controlnet_subsets_config_by_subdirs(train_data_dir: Optional[str] 
     return subsets_config
 
   subsets_config = []
-  subsets_config += generate(train_data_dir, False)
+  subsets_config += generate(train_data_dir)#, False)
 
   return subsets_config
 
