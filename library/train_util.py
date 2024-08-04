@@ -1754,7 +1754,9 @@ class ControlNetDataset(BaseDataset):
 
             img_basename = os.path.basename(info.absolute_path)
             ctrl_img_path = os.path.join(subset.conditioning_data_dir, img_basename)
+            print(ctrl_img_path)
             if not os.path.exists(ctrl_img_path):
+                sys.exit("missing conditioning data: " + ctrl_img_path)
                 missing_imgs.append(img_basename)
 
             info.cond_img_path = ctrl_img_path
@@ -1827,156 +1829,6 @@ class ControlNetDataset(BaseDataset):
         return example
 
 
-class ControlNetDatasetMask(BaseDataset):
-    def __init__(
-        self,
-        subsets: Sequence[ControlNetSubset],
-        batch_size: int,
-        tokenizer,
-        max_token_length,
-        resolution,
-        enable_bucket: bool,
-        min_bucket_reso: int,
-        max_bucket_reso: int,
-        bucket_reso_steps: int,
-        bucket_no_upscale: bool,
-        debug_dataset,
-    ) -> None:
-        super().__init__(tokenizer, max_token_length, resolution, debug_dataset)
-
-        db_subsets = []
-        for subset in subsets:
-            db_subset = DreamBoothSubset(
-                subset.image_dir,
-                False,
-                None,
-                subset.caption_extension,
-                subset.num_repeats,
-                subset.shuffle_caption,
-                subset.keep_tokens,
-                subset.color_aug,
-                subset.flip_aug,
-                subset.face_crop_aug_range,
-                subset.random_crop,
-                subset.caption_dropout_rate,
-                subset.caption_dropout_every_n_epochs,
-                subset.caption_tag_dropout_rate,
-                subset.token_warmup_min,
-                subset.token_warmup_step,
-            )
-            db_subsets.append(db_subset)
-
-        self.dreambooth_dataset_delegate = DreamBoothDataset(
-            db_subsets,
-            batch_size,
-            tokenizer,
-            max_token_length,
-            resolution,
-            enable_bucket,
-            min_bucket_reso,
-            max_bucket_reso,
-            bucket_reso_steps,
-            bucket_no_upscale,
-            1.0,
-            debug_dataset,
-            is_controlnet=True,
-        )
-
-        # config_util等から参照される値をいれておく（若干微妙なのでなんとかしたい）
-        self.image_data = self.dreambooth_dataset_delegate.image_data
-        self.batch_size = batch_size
-        self.num_train_images = self.dreambooth_dataset_delegate.num_train_images
-        self.num_reg_images = self.dreambooth_dataset_delegate.num_reg_images
-
-        # assert all conditioning data exists
-        missing_imgs = []
-        cond_imgs_with_img = set()
-        for image_key, info in self.dreambooth_dataset_delegate.image_data.items():
-            db_subset = self.dreambooth_dataset_delegate.image_to_subset[image_key]
-            subset = None
-            for s in subsets:
-                if s.image_dir == db_subset.image_dir:
-                    subset = s
-                    break
-            assert subset is not None, "internal error: subset not found"
-
-            if not os.path.isdir(subset.conditioning_data_dir):
-                print(f"not directory: {subset.conditioning_data_dir}")
-                continue
-
-            img_basename = os.path.basename(info.absolute_path)
-            ctrl_img_path = os.path.join(subset.conditioning_data_dir, img_basename)
-            if not os.path.exists(ctrl_img_path):
-                missing_imgs.append(img_basename)
-
-            info.cond_img_path = ctrl_img_path
-            cond_imgs_with_img.add(ctrl_img_path)
-
-        extra_imgs = []
-        for subset in subsets:
-            conditioning_img_paths = glob_images(subset.conditioning_data_dir, "*")
-            extra_imgs.extend(
-                [cond_img_path for cond_img_path in conditioning_img_paths if cond_img_path not in cond_imgs_with_img]
-            )
-
-        assert len(missing_imgs) == 0, f"missing conditioning data for {len(missing_imgs)} images: {missing_imgs}"
-        assert len(extra_imgs) == 0, f"extra conditioning data for {len(extra_imgs)} images: {extra_imgs}"
-
-        self.conditioning_image_transforms = IMAGE_TRANSFORMS
-
-    def make_buckets(self):
-        self.dreambooth_dataset_delegate.make_buckets()
-        self.bucket_manager = self.dreambooth_dataset_delegate.bucket_manager
-        self.buckets_indices = self.dreambooth_dataset_delegate.buckets_indices
-
-    def __len__(self):
-        return self.dreambooth_dataset_delegate.__len__()
-
-    def __getitem__(self, index):
-        example = self.dreambooth_dataset_delegate[index]
-
-        bucket = self.dreambooth_dataset_delegate.bucket_manager.buckets[
-            self.dreambooth_dataset_delegate.buckets_indices[index].bucket_index
-        ]
-        bucket_batch_size = self.dreambooth_dataset_delegate.buckets_indices[index].bucket_batch_size
-        image_index = self.dreambooth_dataset_delegate.buckets_indices[index].batch_index * bucket_batch_size
-
-        conditioning_images = []
-
-        for i, image_key in enumerate(bucket[image_index : image_index + bucket_batch_size]):
-            image_info = self.dreambooth_dataset_delegate.image_data[image_key]
-
-            target_size_hw = example["target_sizes_hw"][i]
-            original_size_hw = example["original_sizes_hw"][i]
-            crop_top_left = example["crop_top_lefts"][i]
-            flipped = example["flippeds"][i]
-            cond_img = load_image(image_info.cond_img_path)
-            ori_image = copy.deepcopy(example["ori_images"][i])
-
-            if self.dreambooth_dataset_delegate.enable_bucket:
-                cond_img = cv2.resize(cond_img, image_info.resized_size, interpolation=cv2.INTER_AREA)  # INTER_AREAでやりたいのでcv2でリサイズ
-                assert (
-                    cond_img.shape[0] == original_size_hw[0] and cond_img.shape[1] == original_size_hw[1]
-                ), f"size of conditioning image is not match / 画像サイズが合いません: {image_info.absolute_path}"
-                ct, cl = crop_top_left
-                h, w = target_size_hw
-                cond_img = cond_img[ct : ct + h, cl : cl + w]
-            else:
-                assert (
-                    cond_img.shape[0] == self.height and cond_img.shape[1] == self.width
-                ), f"image size is small / 画像サイズが小さいようです: {image_info.absolute_path}"
-
-            if flipped:
-                cond_img = cond_img[:, ::-1, :].copy()  # copy to avoid negative stride
-            ori_image[cond_img > 128] = 0
-            # cond_img = self.conditioning_image_transforms(cond_img)
-            ori_image = self.conditioning_image_transforms(ori_image)
-
-            conditioning_images.append(ori_image)
-
-        example["conditioning_images"] = torch.stack(conditioning_images).to(memory_format=torch.contiguous_format).float()
-
-        return example
 
 # behave as Dataset mock
 class DatasetGroup(torch.utils.data.ConcatDataset):
