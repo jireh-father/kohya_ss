@@ -1406,6 +1406,8 @@ class DreamBoothDataset(BaseDataset):
                 continue
 
             img_paths, captions = load_dreambooth_dir(subset)
+            print("subset", subset)
+            print("img_paths", len(img_paths))
             if len(img_paths) < 1:
                 print(f"ignore subset with image_dir='{subset.image_dir}': no images found / 画像が見つからないためサブセットを無視します")
                 continue
