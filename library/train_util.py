@@ -505,6 +505,7 @@ class BaseDataset(torch.utils.data.Dataset):
         max_token_length: int,
         resolution: Optional[Tuple[int, int]],
         debug_dataset: bool,
+        is_controlnet: bool=False,
     ) -> None:
         super().__init__()
 
@@ -550,6 +551,8 @@ class BaseDataset(torch.utils.data.Dataset):
 
         # caching
         self.caching_mode = None  # None, 'latents', 'text'
+
+        self.is_controlnet = is_controlnet
 
     def set_seed(self, seed):
         self.seed = seed
@@ -1198,7 +1201,8 @@ class BaseDataset(torch.utils.data.Dataset):
         else:
             images = None
         example["images"] = images
-        example["ori_images"] = ori_images
+        if self.is_controlnet:
+            example["ori_images"] = ori_images
 
         example["latents"] = torch.stack(latents_list) if latents_list[0] is not None else None
         example["captions"] = captions
@@ -1289,8 +1293,9 @@ class DreamBoothDataset(BaseDataset):
         bucket_no_upscale: bool,
         prior_loss_weight: float,
         debug_dataset,
+        is_controlnet=False,
     ) -> None:
-        super().__init__(tokenizer, max_token_length, resolution, debug_dataset)
+        super().__init__(tokenizer, max_token_length, resolution, debug_dataset, is_controlnet)
 
         assert resolution is not None, f"resolution is required / resolution（解像度）指定は必須です"
 
@@ -1719,6 +1724,7 @@ class ControlNetDataset(BaseDataset):
             bucket_no_upscale,
             1.0,
             debug_dataset,
+            is_controlnet=True,
         )
 
         # config_util等から参照される値をいれておく（若干微妙なのでなんとかしたい）
