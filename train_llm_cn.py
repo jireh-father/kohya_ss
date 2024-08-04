@@ -210,6 +210,9 @@ def train(args):
             else:
                 state_dict = torch.load(filename)
             # if not args.load_cn_model:
+            print("state_dict", state_dict.keys())
+            print("controlnet.state_dict", controlnet.state_dict().keys())
+            sys.exit()
             state_dict = model_util.convert_controlnet_state_dict_to_diffusers(state_dict)
             controlnet.load_state_dict(state_dict, strict=False)
         elif os.path.isdir(filename):
