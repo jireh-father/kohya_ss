@@ -243,7 +243,7 @@ def train(args):
     accelerator.print("prepare optimizer, data loader etc.")
 
     trainable_params = controlnet.parameters()
-
+    print("trainable_params", trainable_params)
     _, _, optimizer = train_util.get_optimizer(args, trainable_params)
 
     # dataloaderを準備する
