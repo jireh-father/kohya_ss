@@ -197,8 +197,8 @@ def train(args):
         def __contains__(self, name):
             return name in self.__dict__
 
-    unet.config = CustomConfig(**unet.config)
-    # unet.config = SimpleNamespace(**unet.config)
+    # unet.config = CustomConfig(**unet.config)
+    unet.config = SimpleNamespace(**unet.config)
 
     controlnet = ControlNetModel.from_unet(unet)
 

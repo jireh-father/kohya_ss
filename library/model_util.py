@@ -855,7 +855,7 @@ def convert_controlnet_state_dict_to_diffusers(controlnet_state_dict):
             for sd_part, diffusers_part in unet_conversion_map_resnet:
                 v = v.replace(sd_part, diffusers_part)
             mapping[k] = v
-    new_state_dict = {v: controlnet_state_dict[k] for k, v in mapping.items()}# if k in controlnet_state_dict}
+    new_state_dict = {v: controlnet_state_dict[k] for k, v in mapping.items() if k in controlnet_state_dict}
     return new_state_dict
 
 
