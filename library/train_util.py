@@ -28,6 +28,7 @@ import hashlib
 import subprocess
 from io import BytesIO
 import toml
+import copy
 
 from tqdm import tqdm
 import torch
@@ -1016,6 +1017,7 @@ class BaseDataset(torch.utils.data.Dataset):
         input_ids2_list = []
         latents_list = []
         images = []
+        ori_images = []
         original_sizes_hw = []
         crop_top_lefts = []
         target_sizes_hw = []
@@ -1031,6 +1033,7 @@ class BaseDataset(torch.utils.data.Dataset):
 
             flipped = subset.flip_aug and random.random() < 0.5  # not flipped or flipped with 50% chance
 
+            ori_image = None
             # image/latentsを処理する
             if image_info.latents is not None:  # cache_latents=Trueの場合
                 original_size = image_info.latents_original_size
@@ -1088,10 +1091,12 @@ class BaseDataset(torch.utils.data.Dataset):
                 if flipped:
                     img = img[:, ::-1, :].copy()  # copy to avoid negative stride problem
 
+                ori_image = copy.deepcopy(img)
                 latents = None
                 image = self.image_transforms(img)  # -1.0~1.0のtorch.Tensorになる
 
             images.append(image)
+            ori_images.append(ori_image)
             latents_list.append(latents)
 
             target_size = (image.shape[2], image.shape[1]) if image is not None else (latents.shape[2] * 8, latents.shape[1] * 8)
@@ -1193,6 +1198,7 @@ class BaseDataset(torch.utils.data.Dataset):
         else:
             images = None
         example["images"] = images
+        example["ori_images"] = ori_images
 
         example["latents"] = torch.stack(latents_list) if latents_list[0] is not None else None
         example["captions"] = captions
@@ -1784,6 +1790,7 @@ class ControlNetDataset(BaseDataset):
             crop_top_left = example["crop_top_lefts"][i]
             flipped = example["flippeds"][i]
             cond_img = load_image(image_info.cond_img_path)
+            ori_image = copy.deepcopy(example["ori_images"][i])
 
             if self.dreambooth_dataset_delegate.enable_bucket:
                 cond_img = cv2.resize(cond_img, image_info.resized_size, interpolation=cv2.INTER_AREA)  # INTER_AREAでやりたいのでcv2でリサイズ
@@ -1800,9 +1807,11 @@ class ControlNetDataset(BaseDataset):
 
             if flipped:
                 cond_img = cond_img[:, ::-1, :].copy()  # copy to avoid negative stride
+            ori_image[cond_img > 128] = 0
+            # cond_img = self.conditioning_image_transforms(cond_img)
+            ori_image = self.conditioning_image_transforms(ori_image)
 
-            cond_img = self.conditioning_image_transforms(cond_img)
-            conditioning_images.append(cond_img)
+            conditioning_images.append(ori_image)
 
         example["conditioning_images"] = torch.stack(conditioning_images).to(memory_format=torch.contiguous_format).float()
 
