@@ -1,5 +1,5 @@
 # common functions for training
-
+import albumentations as albu
 import argparse
 import ast
 import asyncio
@@ -288,34 +288,34 @@ class AugHelper:
     # albumentationsへの依存をなくしたがとりあえず同じinterfaceを持たせる
 
     def __init__(self):
-        pass
+        self.color_aug_method = albu.Compose(
+            [
+                # albu.HueSaturationValue(8, 0, 0, p=0.5),
+                albu.RandomGamma((130, 200), p=0.5),
+            ]
+        )
 
     def color_aug(self, image: np.ndarray):
-        # self.color_aug_method = albu.OneOf(
-        #     [
-        #         albu.HueSaturationValue(8, 0, 0, p=0.5),
-        #         albu.RandomGamma((95, 105), p=0.5),
-        #     ],
-        #     p=0.33,
-        # )
-        hue_shift_limit = 8
+        return self.color_aug_method(image=image)
 
-        # remove dependency to albumentations
-        if random.random() <= 0.33:
-            if random.random() > 0.5:
-                # hue shift
-                hsv_img = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-                hue_shift = random.uniform(-hue_shift_limit, hue_shift_limit)
-                if hue_shift < 0:
-                    hue_shift = 180 + hue_shift
-                hsv_img[:, :, 0] = (hsv_img[:, :, 0] + hue_shift) % 180
-                image = cv2.cvtColor(hsv_img, cv2.COLOR_HSV2BGR)
-            else:
-                # random gamma
-                gamma = random.uniform(0.95, 1.05)
-                image = np.clip(image**gamma, 0, 255).astype(np.uint8)
-
-        return {"image": image}
+        # hue_shift_limit = 8
+        #
+        # # remove dependency to albumentations
+        # if random.random() <= 0.33:
+        #     if random.random() > 0.5:
+        #         # hue shift
+        #         hsv_img = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        #         hue_shift = random.uniform(-hue_shift_limit, hue_shift_limit)
+        #         if hue_shift < 0:
+        #             hue_shift = 180 + hue_shift
+        #         hsv_img[:, :, 0] = (hsv_img[:, :, 0] + hue_shift) % 180
+        #         image = cv2.cvtColor(hsv_img, cv2.COLOR_HSV2BGR)
+        #     else:
+        #         # random gamma
+        #         gamma = random.uniform(0.95, 1.05)
+        #         image = np.clip(image**gamma, 0, 255).astype(np.uint8)
+        #
+        # return {"image": image}
 
     def get_augmentor(self, use_color_aug: bool):  # -> Optional[Callable[[np.ndarray], Dict[str, np.ndarray]]]:
         return self.color_aug if use_color_aug else None
