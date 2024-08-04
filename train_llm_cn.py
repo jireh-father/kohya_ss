@@ -202,21 +202,17 @@ def train(args):
 
     controlnet = ControlNetModel.from_unet(unet)
 
-    if args.controlnet_model_name_or_path:
-        filename = args.controlnet_model_name_or_path
-        if os.path.isfile(filename):
-            if os.path.splitext(filename)[1] == ".safetensors":
-                state_dict = load_file(filename)
-            else:
-                state_dict = torch.load(filename)
-            # if not args.load_cn_model:
-            # print("state_dict", state_dict.keys())
-            # print("controlnet.state_dict", controlnet.state_dict().keys())
-            # sys.exit()
-            # state_dict = model_util.convert_controlnet_state_dict_to_diffusers(state_dict)
-            # controlnet.load_state_dict(state_dict, strict=False)
-        elif os.path.isdir(filename):
-            controlnet = ControlNetModel.from_pretrained(filename)
+    # if args.controlnet_model_name_or_path:
+    #     filename = args.controlnet_model_name_or_path
+    #     if os.path.isfile(filename):
+    #         if os.path.splitext(filename)[1] == ".safetensors":
+    #             state_dict = load_file(filename)
+    #         else:
+    #             state_dict = torch.load(filename)
+    #         state_dict = model_util.convert_controlnet_state_dict_to_diffusers(state_dict)
+    #         controlnet.load_state_dict(state_dict, strict=False)
+    #     elif os.path.isdir(filename):
+    #         controlnet = ControlNetModel.from_pretrained(filename)
 
     # モデルに xformers とか memory efficient attention を組み込む
     train_util.replace_unet_modules(unet, args.mem_eff_attn, args.xformers, args.sdpa)
@@ -604,11 +600,6 @@ def setup_parser() -> argparse.ArgumentParser:
         type=str,
         default=None,
         help="controlnet model name or path / controlnetのモデル名またはパス",
-    )
-    parser.add_argument(
-        "--load_cn_model",
-        default=False,
-        action="store_true",
     )
     parser.add_argument(
         "--conditioning_data_dir",
