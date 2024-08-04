@@ -183,7 +183,22 @@ def train(args):
             "resnet_time_scale_shift": "default",
             "projection_class_embeddings_input_dim": None,
         }
-    unet.config = SimpleNamespace(**unet.config)
+
+    class CustomConfig:
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+
+        def __getattr__(self, name):
+            if name in self.__dict__:
+                return self.__dict__[name]
+            else:
+                raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+
+        def __contains__(self, name):
+            return name in self.__dict__
+
+    unet.config = CustomConfig(**unet.config)
+    # unet.config = SimpleNamespace(**unet.config)
 
     controlnet = ControlNetModel.from_unet(unet)
 
