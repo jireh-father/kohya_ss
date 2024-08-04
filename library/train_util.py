@@ -1333,7 +1333,6 @@ class DreamBoothDataset(BaseDataset):
 
             caption = None
             for cap_path in cap_paths:
-                print("cap_path", cap_path)
                 if os.path.isfile(cap_path):
                     with open(cap_path, "rt", encoding="utf-8") as f:
                         try:
