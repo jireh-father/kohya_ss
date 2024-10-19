@@ -34,7 +34,7 @@ from library.custom_train_functions import (
     scale_v_prediction_loss_like_noise_prediction,
     add_v_prediction_like_loss,
 )
-
+from discord import send_message_to_discord
 
 class NetworkTrainer:
     def __init__(self):
@@ -896,6 +896,7 @@ class NetworkTrainer:
             save_model(ckpt_name, network, global_step, num_train_epochs, force_sync_upload=True)
 
             print("model saved.")
+            send_message_to_discord(f"the end of training. {args.output_name}.")
 
 
 def setup_parser() -> argparse.ArgumentParser:
