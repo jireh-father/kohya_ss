@@ -988,4 +988,8 @@ if __name__ == "__main__":
     args = train_util.read_config_from_file(args, parser)
 
     trainer = NetworkTrainer()
-    trainer.train(args)
+    try:
+        trainer.train(args)
+    except Exception as e:
+        send_message_to_discord(f"error occurred during training: {args.output_name}\n{e}")
+        raise e
