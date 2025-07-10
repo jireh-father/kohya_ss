@@ -1,0 +1,25 @@
+The following values were not passed to `accelerate launch` and had defaults used instead:
+	`--num_processes` was set to a value of `1`
+	`--num_machines` was set to a value of `1`
+	`--mixed_precision` was set to a value of `'no'`
+	`--dynamo_backend` was set to a value of `'no'`
+To avoid this warning pass in values for each of the problematic parameters or run `accelerate config`.
+Traceback (most recent call last):
+  File "./train_network.py", line 19, in <module>
+    import library.train_util as train_util
+  File "D:\source\kohya_ss\library\train_util.py", line 2, in <module>
+    import albumentations as albu
+ModuleNotFoundError: No module named 'albumentations'
+Traceback (most recent call last):
+  File "C:\Users\seoil\anaconda3\envs\kohya_ss\lib\runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "C:\Users\seoil\anaconda3\envs\kohya_ss\lib\runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "C:\Users\seoil\anaconda3\envs\kohya_ss\Scripts\accelerate.exe\__main__.py", line 7, in <module>
+  File "C:\Users\seoil\anaconda3\envs\kohya_ss\lib\site-packages\accelerate\commands\accelerate_cli.py", line 48, in main
+    args.func(args)
+  File "C:\Users\seoil\anaconda3\envs\kohya_ss\lib\site-packages\accelerate\commands\launch.py", line 1174, in launch_command
+    simple_launcher(args)
+  File "C:\Users\seoil\anaconda3\envs\kohya_ss\lib\site-packages\accelerate\commands\launch.py", line 769, in simple_launcher
+    raise subprocess.CalledProcessError(returncode=process.returncode, cmd=cmd)
+subprocess.CalledProcessError: Command '['C:\\Users\\seoil\\anaconda3\\envs\\kohya_ss\\python.exe', './train_network.py', '--enable_bucket', '--min_bucket_reso', '512', '--max_bucket_reso', '640', '--resolution', '512,640', '--save_model_as', 'safetensors', '--network_module', 'networks.lora', '--text_encoder_lr', '5e-05', '--unet_lr', '0.0001', '--lr_scheduler_num_cycles', '1', '--no_half_vae', '--learning_rate', '0.0001', '--lr_scheduler', 'cosine', '--lr_warmup_steps', '46', '--train_batch_size', '1', '--save_every_n_epochs', '50', '--mixed_precision', 'fp16', '--save_precision', 'fp16', '--cache_latents', '--optimizer_type', 'AdamW8bit', '--max_data_loader_n_workers', '0', '--bucket_reso_steps', '64', '--xformers', '--bucket_no_upscale', '--noise_offset', '0.0', '--sample_every_n_epochs', '50', '--sample_prompts', 'shs, long', '--sample_sampler', 'k_dpm_2', '--pretrained_model_name_or_path', 'runwayml/stable-diffusion-v1-5', '--train_data_dir', './work_dir\\0ea66a36-bc51-4ebb-8f9b-982cd3963bef\\img\\1_shs woman', '--output_dir', './work_dir\\0ea66a36-bc51-4ebb-8f9b-982cd3963bef\\model', '--output_name', 'test style', '--logging_dir', './work_dir\\0ea66a36-bc51-4ebb-8f9b-982cd3963bef\\log', '--max_train_epochs', '200', '--network_alpha', '32.0', '--network_dim', '64']' returned non-zero exit status 1.

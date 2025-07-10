@@ -14,7 +14,10 @@ cudnn_windows
 # Cache and temporary files
 .cache
 .DS_Store
-
+.env
+.idea
+work_dir
+.history
 # Scripts and executables
 locon
 gui-user.bat
