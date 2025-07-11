@@ -419,7 +419,7 @@ class LoRATrainingHandler:
                 # '--num_processes=1',
                 # '--num_cpu_threads_per_process=2',
                 # './train_network.py'
-            ]
+            # ]
         else:
             # 현재 환경 사용
             cmd = [
