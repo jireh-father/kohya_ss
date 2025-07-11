@@ -538,57 +538,52 @@ class LoRATrainingHandler:
             # 로그 파일 경로 설정 - base_dir/train.log
             log_file = os.path.join(dirs['base_dir'], 'train.log')
             
-            # 비동기 프로세스 실행
-            with open(log_file, 'w', encoding='utf-8') as log:
-                # Windows에서 UTF-8 인코딩 환경변수 설정
-                env = os.environ.copy()
-                # GPU 0번 사용 설정
-                env['CUDA_VISIBLE_DEVICES'] = '0'
-                if os.name == 'nt':
-                    env['PYTHONIOENCODING'] = 'utf-8'
-                    env['CHCP'] = '65001'
-                
-                if self.virtual_env_bin_path and os.name == 'nt':
-                    # Windows에서 conda 환경 사용 시 - UTF-8 인코딩으로 실행
-                    # CMD를 UTF-8 모드로 시작하고 conda 명령어 실행
-                    utf8_cmd = f'chcp 65001 >nul && {cmd[2]}'
-                    process = await asyncio.create_subprocess_shell(
-                        utf8_cmd,
-                        stdout=log,
-                        stderr=asyncio.subprocess.STDOUT,
-                        cwd=os.getcwd(),
-                        env=env
-                    )
-                elif os.name == 'nt':
-                    # Windows에서 일반적인 경우도 UTF-8 인코딩 적용
-                    # accelerate 명령어를 shell로 실행하되 UTF-8 설정 추가
-                    cmd_str = ' '.join(cmd)
-                    utf8_cmd = f'chcp 65001 >nul && {cmd_str}'
-                    process = await asyncio.create_subprocess_shell(
-                        utf8_cmd,
-                        stdout=log,
-                        stderr=asyncio.subprocess.STDOUT,
-                        cwd=os.getcwd(),
-                        env=env
-                    )
-                else:
-                    # Linux/Mac의 경우
-                    logger.info(f"cmd: {cmd}")
-                    process = await asyncio.create_subprocess_exec(
-                        *cmd,
-                        stdout=log,
-                        stderr=asyncio.subprocess.STDOUT,
-                        cwd=os.getcwd(),
-                        env=env
-                    )
-                logger.info(f"process: {process}")
+            # Windows에서 UTF-8 인코딩 환경변수 설정
+            env = os.environ.copy()
+            # GPU 0번 사용 설정
+            env['CUDA_VISIBLE_DEVICES'] = '0'
+            if os.name == 'nt':
+                env['PYTHONIOENCODING'] = 'utf-8'
+                env['CHCP'] = '65001'
+            
+            # 비동기 프로세스 실행 - 로그 리다이렉션을 커맨드에서 직접 처리
+            if self.virtual_env_bin_path and os.name == 'nt':
+                # Windows에서 conda 환경 사용 시 - UTF-8 인코딩으로 실행
+                # CMD를 UTF-8 모드로 시작하고 conda 명령어 실행
+                utf8_cmd = f'chcp 65001 >nul && {cmd[2]} > "{log_file}" 2>&1'
+                process = await asyncio.create_subprocess_shell(
+                    utf8_cmd,
+                    cwd=os.getcwd(),
+                    env=env
+                )
+            elif os.name == 'nt':
+                # Windows에서 일반적인 경우도 UTF-8 인코딩 적용
+                # accelerate 명령어를 shell로 실행하되 UTF-8 설정 추가
+                cmd_str = ' '.join(cmd)
+                utf8_cmd = f'chcp 65001 >nul && {cmd_str} > "{log_file}" 2>&1'
+                process = await asyncio.create_subprocess_shell(
+                    utf8_cmd,
+                    cwd=os.getcwd(),
+                    env=env
+                )
+            else:
+                # Linux/Mac의 경우 - bash shell을 사용하여 리다이렉션 처리
+                cmd_str = ' '.join(cmd)
+                bash_cmd = f'{cmd_str} > "{log_file}" 2>&1'
+                logger.info(f"bash_cmd: {bash_cmd}")
+                process = await asyncio.create_subprocess_shell(
+                    bash_cmd,
+                    cwd=os.getcwd(),
+                    env=env
+                )
+            logger.info(f"process: {process}")
 
-                self.running_processes.add(process)
-                logger.info(f"학습 프로세스 시작됨 - PID: {process.pid}, 로그: {log_file}")
-                
-                # 프로세스 완료 대기
-                await process.wait()
-                logger.info(f"process.returncode: {process.returncode}")
+            self.running_processes.add(process)
+            logger.info(f"학습 프로세스 시작됨 - PID: {process.pid}, 로그: {log_file}")
+            
+            # 프로세스 완료 대기
+            await process.wait()
+            logger.info(f"process.returncode: {process.returncode}")
             
             # 로그 파일에서 실제 에러 확인
             if process.returncode == 0:
