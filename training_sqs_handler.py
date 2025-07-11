@@ -40,7 +40,8 @@ class LoRATrainingHandler:
     def __init__(self, queue_url: str, region_name: str = 'ap-northeast-2', identifier: str = 'shs', 
                  tmp_dir: str = './work_dir', sqs_max_messages: int = 10, 
                  sqs_visibility_timeout: int = 3, sqs_wait_time: int = 20,
-                 s3_bucket_name: str = None, s3_region: str = None, conda_env: str = None):
+                 s3_bucket_name: str = None, s3_region: str = None, conda_env: str = None,
+                 conda_path: str = None):
         """
         SQS LoRA 학습 핸들러 초기화
         
@@ -55,6 +56,7 @@ class LoRATrainingHandler:
             s3_bucket_name: S3 버킷 이름
             s3_region: S3 리전 (기본값: SQS와 동일한 리전)
             conda_env: conda 환경명 (기본값: 현재 환경)
+            conda_path: conda 실행 파일의 경로 (기본값: 자동 탐지)
         """
         self.queue_url = queue_url
         self.region_name = region_name
@@ -69,6 +71,7 @@ class LoRATrainingHandler:
         self.s3_bucket_name = s3_bucket_name
         self.s3_region = s3_region or region_name
         self.conda_env = conda_env
+        self.conda_path = conda_path
         self.firebase_initialized = False
         
     def _get_aws_credentials(self) -> tuple:
@@ -404,15 +407,61 @@ class LoRATrainingHandler:
         # 4. 기본 명령어 구성
         if self.conda_env:
             # conda 환경이 지정된 경우
+            import sys
+            import shutil
+            
+            # conda 실행 파일 경로 설정
+            if self.conda_path:
+                # 사용자가 지정한 conda 경로 사용
+                conda_exe = self.conda_path
+                if not os.path.exists(conda_exe):
+                    logger.warning(f"지정된 conda 경로가 존재하지 않습니다: {conda_exe}")
+                    logger.info("자동 탐지로 전환합니다.")
+                    conda_exe = None
+            else:
+                conda_exe = None
+            
+            if not conda_exe:
+                # conda 실행 파일 경로 자동 찾기
+                conda_exe = shutil.which('conda')
+                if not conda_exe:
+                    # conda가 PATH에 없으면 일반적인 경로에서 찾기
+                    if os.name == 'nt':  # Windows
+                        potential_paths = [
+                            os.path.expanduser('~/miniconda3/Scripts/conda.exe'),
+                            os.path.expanduser('~/anaconda3/Scripts/conda.exe'),
+                            'C:/miniconda3/Scripts/conda.exe',
+                            'C:/anaconda3/Scripts/conda.exe'
+                        ]
+                    else:  # Linux/Mac
+                        potential_paths = [
+                            os.path.expanduser('~/miniconda3/bin/conda'),
+                            os.path.expanduser('~/anaconda3/bin/conda'),
+                            '/opt/miniconda3/bin/conda',
+                            '/opt/anaconda3/bin/conda'
+                        ]
+                    
+                    for path in potential_paths:
+                        if os.path.exists(path):
+                            conda_exe = path
+                            break
+                    else:
+                        conda_exe = 'conda'  # 기본값으로 fallback
+            
+            logger.info(f"사용할 conda 실행 파일: {conda_exe}")
+            logger.info(f"사용할 conda 환경: {self.conda_env}")
+            
             if os.name == 'nt':  # Windows
+                # Windows에서는 conda run을 사용하여 환경 활성화 문제 회피
                 cmd = [
-                    'cmd', '/c',
-                    f'conda activate {self.conda_env} && accelerate launch --num_cpu_threads_per_process=2 ./train_network.py'
+                    conda_exe, 'run', '-n', self.conda_env,
+                    'accelerate', 'launch', '--num_cpu_threads_per_process=2', './train_network.py'
                 ]
             else:  # Linux/Mac
+                # Linux/Mac에서는 conda run 사용
                 cmd = [
-                    'bash', '-c',
-                    f'conda activate {self.conda_env} && accelerate launch --num_cpu_threads_per_process=2 ./train_network.py'
+                    conda_exe, 'run', '-n', self.conda_env,
+                    'accelerate', 'launch', '--num_cpu_threads_per_process=2', './train_network.py'
                 ]
         else:
             # 현재 환경 사용 - 현재 Python 가상환경의 accelerate 사용
@@ -485,32 +534,16 @@ class LoRATrainingHandler:
         params = {**default_params, **override_params}
         
         # 7. 명령어에 파라미터 추가
-        if self.conda_env and os.name == 'nt':
-            # Windows에서 conda 환경 사용 시 - 명령어 문자열에 파라미터 추가
-            cmd_parts = []
-            for key, value in params.items():
-                if key in ['enable_bucket', 'no_half_vae', 'cache_latents', 'xformers', 'bucket_no_upscale']:
-                    if value:
-                        cmd_parts.append(f'--{key}')
-                else:
-                    # 경로를 정규화하여 슬래시 사용
-                    if 'dir' in key.lower() and isinstance(value, str):
-                        value = value.replace('\\', '/')
-                    cmd_parts.extend([f'--{key}', f'"{str(value)}"'])
-            
-            # 기존 명령어에 파라미터 추가
-            cmd[2] = cmd[2] + ' ' + ' '.join(cmd_parts)
-        else:
-            # 일반적인 경우
-            for key, value in params.items():
-                if key in ['enable_bucket', 'no_half_vae', 'cache_latents', 'xformers', 'bucket_no_upscale']:
-                    if value:
-                        cmd.append(f'--{key}')
-                else:
-                    # 경로를 정규화하여 슬래시 사용
-                    if 'dir' in key.lower() and isinstance(value, str):
-                        value = value.replace('\\', '/')
-                    cmd.extend([f'--{key}', f'"{str(value)}"'])
+        # 모든 경우에 동일한 방식으로 파라미터 추가 (conda run도 exec 방식으로 사용)
+        for key, value in params.items():
+            if key in ['enable_bucket', 'no_half_vae', 'cache_latents', 'xformers', 'bucket_no_upscale']:
+                if value:
+                    cmd.append(f'--{key}')
+            else:
+                # 경로를 정규화하여 슬래시 사용
+                if 'dir' in key.lower() and isinstance(value, str):
+                    value = value.replace('\\', '/')
+                cmd.extend([f'--{key}', str(value)])
         
         logger.info(f"학습 데이터 준비 완료 - 이미지: {len(image_files)}개, 출력: {dirs['model_dir']}")
         return cmd, dirs
@@ -553,12 +586,10 @@ class LoRATrainingHandler:
                     env['PYTHONIOENCODING'] = 'utf-8'
                     env['CHCP'] = '65001'
                 
-                if self.conda_env and os.name == 'nt':
-                    # Windows에서 conda 환경 사용 시 - UTF-8 인코딩으로 실행
-                    # CMD를 UTF-8 모드로 시작하고 conda 명령어 실행
-                    utf8_cmd = f'chcp 65001 >nul && {cmd[2]}'
-                    process = await asyncio.create_subprocess_shell(
-                        utf8_cmd,
+                if self.conda_env:
+                    # conda 환경 사용 시 - conda run을 exec 방식으로 실행
+                    process = await asyncio.create_subprocess_exec(
+                        *cmd,
                         stdout=log,
                         stderr=asyncio.subprocess.STDOUT,
                         cwd=os.getcwd(),
@@ -1003,8 +1034,13 @@ def main():
     )
     parser.add_argument(
         '--conda-env',
-        default=None,#'kohya_ss',
+        default='kohya_ss',
         help='사용할 conda 환경명 (지정하지 않으면 현재 환경 사용)'
+    )
+    parser.add_argument(
+        '--conda-path',
+        default='/home/ilseo/source/miniconda3/bin/conda',
+        help='conda 실행 파일의 경로 (지정하지 않으면 자동으로 찾음)'
     )
     
     args = parser.parse_args()
@@ -1023,7 +1059,8 @@ def main():
         args.sqs_wait_time_seconds,
         args.s3_bucket_name,
         args.s3_region,
-        args.conda_env
+        args.conda_env,
+        args.conda_path
     )
     
     try:
