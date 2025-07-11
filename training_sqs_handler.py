@@ -483,7 +483,7 @@ class LoRATrainingHandler:
             # Windows에서 conda 환경 사용 시 - 명령어 문자열에 파라미터 추가
             cmd_parts = []
             for key, value in params.items():
-                if value == True:
+                if isinstance(value, bool) and value == True:
                     cmd_parts.append(f'--{key}')
                 else:
                     # 경로를 정규화하여 슬래시 사용
@@ -496,7 +496,7 @@ class LoRATrainingHandler:
         else:
             # 일반적인 경우
             for key, value in params.items():
-                if value == True:
+                if isinstance(value, bool) and value == True:
                     cmd.append(f'--{key}')
                 else:
                     # 경로를 정규화하여 슬래시 사용
