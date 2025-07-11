@@ -20,6 +20,8 @@ from dotenv import load_dotenv
 # .env 파일 로딩
 load_dotenv()
 
+SQS_URL_LORA_TRAINING = os.getenv('SQS_URL_LORA_TRAINING')
+
 # 로깅 설정
 logging.basicConfig(
     level=logging.INFO,
@@ -728,7 +730,7 @@ def main():
     parser = argparse.ArgumentParser(description='AWS SQS LoRA 학습 핸들러')
     parser.add_argument(
         '--queue-url',
-        required=True,
+        default=SQS_URL_LORA_TRAINING,
         help='SQS 큐 URL'
     )
     parser.add_argument(
