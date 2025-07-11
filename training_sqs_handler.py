@@ -535,6 +535,8 @@ class LoRATrainingHandler:
             with open(log_file, 'w', encoding='utf-8') as log:
                 # Windows에서 UTF-8 인코딩 환경변수 설정
                 env = os.environ.copy()
+                # GPU 0번 사용 설정
+                env['CUDA_VISIBLE_DEVICES'] = '0'
                 if os.name == 'nt':
                     env['PYTHONIOENCODING'] = 'utf-8'
                     env['CHCP'] = '65001'
