@@ -980,7 +980,7 @@ def main():
     )
     parser.add_argument(
         '--conda-env',
-        default='kohya_ss',
+        default=None,#'kohya_ss',
         help='사용할 conda 환경명 (지정하지 않으면 현재 환경 사용)'
     )
     
