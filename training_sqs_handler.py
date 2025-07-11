@@ -415,9 +415,21 @@ class LoRATrainingHandler:
                     f'conda activate {self.conda_env} && accelerate launch --num_cpu_threads_per_process=2 ./train_network.py'
                 ]
         else:
-            # 현재 환경 사용
+            # 현재 환경 사용 - 현재 Python 가상환경의 accelerate 사용
+            import sys
+            python_dir = os.path.dirname(sys.executable)
+            
+            if os.name == 'nt':  # Windows
+                accelerate_path = os.path.join(python_dir, 'Scripts', 'accelerate.exe')
+            else:  # Linux/Mac
+                accelerate_path = os.path.join(python_dir, 'accelerate')
+            
+            # accelerate가 해당 경로에 없으면 기본 경로 사용
+            if not os.path.exists(accelerate_path):
+                accelerate_path = 'accelerate'
+            
             cmd = [
-                'accelerate', 'launch',
+                accelerate_path, 'launch',
                 '--num_cpu_threads_per_process=2',
                 './train_network.py'
             ]
@@ -554,6 +566,12 @@ class LoRATrainingHandler:
                     )
                 elif os.name == 'nt':
                     # Windows에서 일반적인 경우도 UTF-8 인코딩 적용
+                    # 현재 Python 가상환경 경로를 환경변수에 추가
+                    import sys
+                    python_dir = os.path.dirname(sys.executable)
+                    env['PATH'] = f"{python_dir};{python_dir}\\Scripts;{env.get('PATH', '')}"
+                    env['VIRTUAL_ENV'] = getattr(sys, 'prefix', sys.exec_prefix)
+                    
                     # accelerate 명령어를 shell로 실행하되 UTF-8 설정 추가
                     cmd_str = ' '.join(cmd)
                     utf8_cmd = f'chcp 65001 >nul && {cmd_str}'
@@ -566,6 +584,11 @@ class LoRATrainingHandler:
                     )
                 else:
                     # Linux/Mac의 경우
+                    # 현재 Python 가상환경 경로를 환경변수에 추가
+                    import sys
+                    env['PATH'] = f"{os.path.dirname(sys.executable)}:{env.get('PATH', '')}"
+                    env['VIRTUAL_ENV'] = getattr(sys, 'prefix', sys.exec_prefix)
+                    
                     process = await asyncio.create_subprocess_exec(
                         *cmd,
                         stdout=log,
