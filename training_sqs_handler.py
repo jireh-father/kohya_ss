@@ -407,17 +407,24 @@ class LoRATrainingHandler:
             if os.name == 'nt':  # Windows
                 cmd = [
                     'cmd', '/c',
-                    f'{self.virtual_env_bin_path}/accelerate launch --num_cpu_threads_per_process=2 ./train_network.py'
+                    f'{self.virtual_env_bin_path}/accelerate launch --num_processes=1 --num_cpu_threads_per_process=2 ./train_network.py'
                 ]
             else:  # Linux/Mac
+                # cmd = [
+                #     'bash', '-c',
+                #     f'{self.virtual_env_bin_path}/accelerate launch --num_processes=1 --num_cpu_threads_per_process=2 ./train_network.py'
+                # ]
                 cmd = [
-                    'bash', '-c',
-                    f'{self.virtual_env_bin_path}/accelerate launch --num_cpu_threads_per_process=2 ./train_network.py'
-                ]
+                f'{self.virtual_env_bin_path}/accelerate', 'launch',
+                '--num_processes=1',
+                '--num_cpu_threads_per_process=2',
+                './train_network.py'
+            ]
         else:
             # 현재 환경 사용
             cmd = [
                 'accelerate', 'launch',
+                '--num_processes=1',
                 '--num_cpu_threads_per_process=2',
                 './train_network.py'
             ]
