@@ -1041,6 +1041,7 @@ if __name__ == "__main__":
         REGION_NAME = os.getenv('REGION_NAME')
         AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
         AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+        S3_BUCKET_NAME = os.getenv('S3_BUCKET_NAME')
 
         cred = credentials.Certificate(FIREBASE_SERVICE_ACCOUNT_KEY)
         firebase_admin.initialize_app(cred, {
@@ -1055,14 +1056,41 @@ if __name__ == "__main__":
             aws_secret_access_key=AWS_SECRET_ACCESS_KEY
         )
 
+        
+
 
     trainer = NetworkTrainer()
     try:
         trainer.train(args)
         print("training finished")
-        _update_training_status(args.request_id, 'SUCCESS')
+        if args.is_executed_by_sqs:
+            # output_dir의 .safetensors 파일들을 S3에 업로드 (custom_hairstyle_models/{request_id}/)
+            import glob
+            import os
+            
+            # output_dir에서 .safetensors 파일들 찾기
+            safetensors_files = glob.glob(os.path.join(output_dir, "*.safetensors"))
+            
+            for file_path in safetensors_files:
+                filename = os.path.basename(file_path)
+                s3_key = f'custom_hairstyle_models/{args.request_id}/{filename}'
+                
+                try:
+                    # args = {'ACL': 'public-read',}
+
+                    s3.upload_file(
+                        file_path,
+                        S3_BUCKET_NAME,
+                        s3_key,
+                        # ExtraArgs=args
+                    )
+                    print(f"S3 업로드 완료: {filename} -> s3://{S3_BUCKET_NAME}/{s3_key}")
+                except Exception as e:
+                    print(f"S3 업로드 실패 {filename}: {e}")
+                _update_training_status(args.request_id, 'SUCCESS')
     except Exception as e:
         send_message_to_discord(f"error occurred during training: {args.output_name}\n{e}")
-        _update_training_status(args.request_id, 'FAILED', error_msg=str(e))
+        if args.is_executed_by_sqs:
+            _update_training_status(args.request_id, 'FAILED', error_msg=str(e))
         raise e
     

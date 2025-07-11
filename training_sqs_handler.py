@@ -325,7 +325,7 @@ class LoRATrainingHandler:
             logger.error(f"S3 이미지 다운로드 중 오류: {e}")
             raise
     
-    def _create_caption_files(self, img_dir: str, image_files: list, identifier: str, hair_length: str):
+    def _create_caption_files(self, img_dir: str, image_files: list, identifier: str, style_type: str, hair_length: str, style_name: str):
         """
         이미지 파일과 동일한 이름의 캡션 txt 파일들을 생성
         
@@ -339,8 +339,13 @@ class LoRATrainingHandler:
 
         if "hair" not in hair_length:
             hair_length = f"{hair_length} hair"
-        
-        caption_content = f"{identifier}, {hair_length}"
+
+        if style_type == "hairstyle":
+            caption_content = f"{identifier}, {hair_length}"
+        else:
+            if "hair" not in style_name:
+                style_name = f"{style_name} hair"
+            caption_content = f"{identifier}, {style_name}"
         
         for image_file in image_files:
             # 이미지 파일명에서 확장자 제거
@@ -388,6 +393,8 @@ class LoRATrainingHandler:
         request_id = message_data['request_id']
         s3_folder_path = message_data['s3_folder_path']
         hair_length = message_data['hair_length']
+        style_type = message_data['style_type']
+        style_name = message_data['style_name']
         
         # 1. 디렉토리 구조 생성
         dirs = self._create_directory_structure(request_id)
@@ -399,7 +406,7 @@ class LoRATrainingHandler:
             raise ValueError(f"다운로드된 이미지가 없습니다: {s3_folder_path}")
         
         # 3. 캡션 파일 생성
-        self._create_caption_files(dirs['img_dir'], image_files, self.identifier, hair_length)
+        self._create_caption_files(dirs['img_dir'], image_files, self.identifier, style_type, hair_length, style_name)
         
         # 4. 기본 명령어 구성
         if self.virtual_env_bin_path:
@@ -438,21 +445,20 @@ class LoRATrainingHandler:
             'lr_scheduler': 'cosine',
             'lr_warmup_steps': 46,
             'train_batch_size': 1,
-            # 'save_every_n_epochs': 50,
-            'save_every_n_epochs': 1,
+            'save_every_n_epochs': 50,
             'mixed_precision': 'fp16',
             'save_precision': 'fp16',
             'cache_latents': True,
             'optimizer_type': 'AdamW8bit',
             'max_data_loader_n_workers': 0,
             'bucket_reso_steps': 64,
-            # 'xformers': True,
+            'xformers': True,
             'bucket_no_upscale': True,
             'noise_offset': 0.0,
             # 'sample_every_n_epochs': 50,
-            'sample_every_n_epochs': 1,
-            'sample_prompts': f'{self.identifier}, {hair_length}',
-            'sample_sampler': 'k_dpm_2',
+            # 'sample_every_n_epochs': 1,
+            # 'sample_prompts': f'{self.identifier}, {hair_length}',
+            # 'sample_sampler': 'k_dpm_2',
             # 고정 파라미터
             'pretrained_model_name_or_path': 'runwayml/stable-diffusion-v1-5',
             'train_data_dir': os.path.dirname(dirs['img_dir']),
