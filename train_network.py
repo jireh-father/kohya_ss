@@ -1094,7 +1094,7 @@ if __name__ == "__main__":
                     print(f"S3 업로드 완료: {filename} -> s3://{S3_BUCKET_NAME}/{s3_key}")
                 except Exception as e:
                     print(f"S3 업로드 실패 {filename}: {e}")
-                _update_training_status(args.request_id, 'SUCCESS')
+            _update_training_status(args.request_id, 'SUCCESS')
     except Exception as e:
         send_message_to_discord(f"error occurred during training: {args.output_name}\n{e}")
         if args.is_executed_by_sqs:
