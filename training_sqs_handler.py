@@ -491,7 +491,10 @@ class LoRATrainingHandler:
                     # 경로를 정규화하여 슬래시 사용
                     if 'dir' in key.lower() and isinstance(value, str):
                         value = value.replace('\\', '/')
-                    cmd_parts.extend([f'--{key}', f'"{str(value)}"'])
+                    if value.isdigit():
+                        cmd_parts.extend([f'--{key}', f'{str(value)}'])
+                    else:
+                        cmd_parts.extend([f'--{key}', f'"{str(value)}"'])
             
             # 기존 명령어에 파라미터 추가
             cmd[2] = cmd[2] + ' ' + ' '.join(cmd_parts)
@@ -505,7 +508,10 @@ class LoRATrainingHandler:
                     # 경로를 정규화하여 슬래시 사용
                     if 'dir' in key.lower() and isinstance(value, str):
                         value = value.replace('\\', '/')
-                    cmd.extend([f'--{key}', f'"{str(value)}"'])
+                    if value.isdigit():
+                        cmd.extend([f'--{key}', f'{str(value)}'])
+                    else:
+                        cmd.extend([f'--{key}', f'"{str(value)}"'])
         
         logger.info(f"학습 데이터 준비 완료 - 이미지: {len(image_files)}개, 출력: {dirs['model_dir']}")
         return cmd, dirs
