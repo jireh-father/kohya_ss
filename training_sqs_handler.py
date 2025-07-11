@@ -538,16 +538,16 @@ class LoRATrainingHandler:
             # 로그 파일 경로 설정 - base_dir/train.log
             log_file = os.path.join(dirs['base_dir'], 'train.log')
             
+            # Windows에서 UTF-8 인코딩 환경변수 설정
+            env = os.environ.copy()
+            # GPU 0번 사용 설정
+            env['CUDA_VISIBLE_DEVICES'] = '0'
+            if os.name == 'nt':
+                env['PYTHONIOENCODING'] = 'utf-8'
+                env['CHCP'] = '65001'
+            
             # 비동기 프로세스 실행
             with open(log_file, 'w', encoding='utf-8') as log:
-                # Windows에서 UTF-8 인코딩 환경변수 설정
-                env = os.environ.copy()
-                # GPU 0번 사용 설정
-                env['CUDA_VISIBLE_DEVICES'] = '0'
-                if os.name == 'nt':
-                    env['PYTHONIOENCODING'] = 'utf-8'
-                    env['CHCP'] = '65001'
-                
                 if self.virtual_env_bin_path and os.name == 'nt':
                     # Windows에서 conda 환경 사용 시 - UTF-8 인코딩으로 실행
                     # CMD를 UTF-8 모드로 시작하고 conda 명령어 실행
@@ -585,16 +585,24 @@ class LoRATrainingHandler:
                 logger.info(f"학습 프로세스 시작됨 - PID: {process.pid}, 로그: {log_file}")
                 
                 # 프로세스 완료 대기
-                await process.wait()
+                return_code = await process.wait()
+                logger.info(f"학습 프로세스 완료 - PID: {process.pid}, 종료 코드: {return_code}")
             
-            # 로그 파일에서 실제 에러 확인
-            if process.returncode == 0:
+            # 프로세스가 정상적으로 생성되었는지 확인
+            if process is None:
+                logger.error("프로세스가 생성되지 않았습니다")
+                await self._post_training_error(output_name, message_data, "프로세스 생성 실패")
+                return
+            
+            # 프로세스 완료 후 returncode 확인 및 후처리
+            logger.info(f"종료 코드 확인: {return_code}")
+            if return_code == 0:
                 logger.info(f"학습 완료: {output_name}")
                 
                 # 학습 성공 후작업 실행
                 await self._post_training_success(output_name, message_data, log_file)
             else:
-                logger.error(f"학습 실패: {output_name}, 종료 코드: {process.returncode}")
+                logger.error(f"학습 실패: {output_name}, 종료 코드: {return_code}")
                 
                 # 로그 파일에서 에러 정보 읽기
                 try:
@@ -605,16 +613,19 @@ class LoRATrainingHandler:
                     logger.error(f"로그 파일 읽기 실패: {e}")
                 
                 # 학습 실패 후작업 실행
-                await self._post_training_failure(output_name, message_data, log_file, process.returncode)
+                await self._post_training_failure(output_name, message_data, log_file, return_code)
                 
         except Exception as e:
             logger.error(f"학습 실행 중 오류 발생: {e}")
+            import traceback
+            logger.error(f"예외 세부사항:\n{traceback.format_exc()}")
             
             # 예외 발생 후작업 실행
             await self._post_training_error(output_name, message_data, str(e))
         finally:
             if process and process in self.running_processes:
                 self.running_processes.remove(process)
+                logger.info(f"프로세스 정리 완료 - PID: {process.pid}")
     
     async def _post_training_success(self, output_name: str, message_data: Dict[str, Any], log_file: str):
         """
