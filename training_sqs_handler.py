@@ -452,7 +452,7 @@ class LoRATrainingHandler:
             'optimizer_type': 'AdamW8bit',
             'max_data_loader_n_workers': 0,
             'bucket_reso_steps': 64,
-            'xformers': True,
+            # 'xformers': True,
             'bucket_no_upscale': True,
             'noise_offset': 0.0,
             # 'sample_every_n_epochs': 50,
