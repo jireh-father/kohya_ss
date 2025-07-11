@@ -60,7 +60,7 @@ class LoRATrainingHandler:
         self.region_name = region_name
         self.sqs = None
         self.s3 = None
-        self.running_processes = set()
+
         self.identifier = identifier
         self.tmp_dir = tmp_dir
         self.sqs_max_messages = sqs_max_messages
@@ -510,17 +510,16 @@ class LoRATrainingHandler:
         logger.info(f"학습 데이터 준비 완료 - 이미지: {len(image_files)}개, 출력: {dirs['model_dir']}")
         return cmd, dirs
     
-    async def _run_training_async(self, cmd: list, output_name: str, message_data: Dict[str, Any], dirs: Dict[str, str]):
+    def _run_training_background(self, cmd: list, output_name: str, message_data: Dict[str, Any], dirs: Dict[str, str]):
         """
-        비동기 학습 실행
+        백그라운드 학습 실행 (nohup 사용)
         
         Args:
             cmd: 실행할 명령어 리스트
             output_name: 출력 모델 이름
-            message_data: 원본 메시지 데이터 (후작업용)
+            message_data: 원본 메시지 데이터
             dirs: 디렉토리 정보
         """
-        process = None
         try:
             logger.info(f"학습 시작: {output_name}")
             logger.info(f"실행 명령어: {' '.join(cmd)}")
@@ -538,291 +537,42 @@ class LoRATrainingHandler:
             # 로그 파일 경로 설정 - base_dir/train.log
             log_file = os.path.join(dirs['base_dir'], 'train.log')
             
-            # Windows에서 UTF-8 인코딩 환경변수 설정
-            env = os.environ.copy()
-            # GPU 0번 사용 설정
-            env['CUDA_VISIBLE_DEVICES'] = '0'
+            # 환경변수 설정
+            env_vars = f'CUDA_VISIBLE_DEVICES=0'
             if os.name == 'nt':
-                env['PYTHONIOENCODING'] = 'utf-8'
-                env['CHCP'] = '65001'
+                env_vars += ' PYTHONIOENCODING=utf-8 CHCP=65001'
             
-            # 비동기 프로세스 실행 - 로그 리다이렉션을 커맨드에서 직접 처리
-            if self.virtual_env_bin_path and os.name == 'nt':
-                # Windows에서 conda 환경 사용 시 - UTF-8 인코딩으로 실행
-                # CMD를 UTF-8 모드로 시작하고 conda 명령어 실행
-                utf8_cmd = f'chcp 65001 >nul && {cmd[2]} > "{log_file}" 2>&1'
-                process = await asyncio.create_subprocess_shell(
-                    utf8_cmd,
-                    cwd=os.getcwd(),
-                    env=env
-                )
-            elif os.name == 'nt':
-                # Windows에서 일반적인 경우도 UTF-8 인코딩 적용
-                # accelerate 명령어를 shell로 실행하되 UTF-8 설정 추가
+            # nohup을 사용한 백그라운드 실행
+            if os.name == 'nt':
+                # Windows의 경우 - start 명령어로 새 윈도우에서 실행
                 cmd_str = ' '.join(cmd)
-                utf8_cmd = f'chcp 65001 >nul && {cmd_str} > "{log_file}" 2>&1'
-                process = await asyncio.create_subprocess_shell(
-                    utf8_cmd,
-                    cwd=os.getcwd(),
-                    env=env
-                )
+                full_cmd = f'start /b cmd /c "set {env_vars} && {cmd_str} > "{log_file}" 2>&1"'
             else:
-                # Linux/Mac의 경우 - bash shell을 사용하여 리다이렉션 처리
+                # Linux/Mac의 경우 - nohup 사용
                 cmd_str = ' '.join(cmd)
-                bash_cmd = f'{cmd_str} > "{log_file}" 2>&1'
-                logger.info(f"bash_cmd: {bash_cmd}")
-                process = await asyncio.create_subprocess_shell(
-                    bash_cmd,
-                    cwd=os.getcwd(),
-                    env=env
-                )
-            logger.info(f"process: {process}")
-
-            self.running_processes.add(process)
-            logger.info(f"학습 프로세스 시작됨 - PID: {process.pid}, 로그: {log_file}")
+                full_cmd = f'nohup {env_vars} {cmd_str} > "{log_file}" 2>&1 &'
             
-            # 프로세스 완료 대기
-            await process.wait()
-            logger.info(f"process.returncode: {process.returncode}")
+            logger.info(f"백그라운드 실행 명령어: {full_cmd}")
             
-            # 로그 파일에서 실제 에러 확인
-            if process.returncode == 0:
-                logger.info(f"학습 완료: {output_name}")
-                
-                # 학습 성공 후작업 실행
-                await self._post_training_success(output_name, message_data, log_file)
-            else:
-                logger.error(f"학습 실패: {output_name}, 종료 코드: {process.returncode}")
-                
-                # 로그 파일에서 에러 정보 읽기
-                try:
-                    with open(log_file, 'r', encoding='utf-8') as f:
-                        log_content = f.read()
-                        logger.error(f"학습 에러 로그:\n{log_content[-2000:]}")  # 마지막 2000자만 로그
-                except Exception as e:
-                    logger.error(f"로그 파일 읽기 실패: {e}")
-                
-                # 학습 실패 후작업 실행
-                await self._post_training_failure(output_name, message_data, log_file, process.returncode)
+            # 백그라운드로 실행 (기다리지 않음)
+            import subprocess
+            subprocess.run(full_cmd, shell=True, cwd=os.getcwd())
+            
+            logger.info(f"학습이 백그라운드에서 시작되었습니다: {output_name}, 로그: {log_file}")
                 
         except Exception as e:
             logger.error(f"학습 실행 중 오류 발생: {e}")
             
-            # 예외 발생 후작업 실행
-            await self._post_training_error(output_name, message_data, str(e))
-        finally:
-            if process and process in self.running_processes:
-                self.running_processes.remove(process)
-    
-    async def _post_training_success(self, output_name: str, message_data: Dict[str, Any], log_file: str):
-        """
-        학습 성공 후작업
-        
-        Args:
-            output_name: 출력 모델 이름
-            message_data: 원본 메시지 데이터
-            log_file: 학습 로그 파일 경로
-        """
-        try:
-            logger.info(f"학습 성공 후작업 시작: {output_name}")
-            
-            # SUCCESS 상태로 업데이트
-            request_id = message_data.get('request_id')
-            if request_id:
-                # 로그에서 최종 손실값 추출
-                final_loss = await self._extract_final_loss_from_log(log_file)
-                
-                self._update_training_status(
-                    request_id, 
-                    'SUCCESS', 
-                    style_name=message_data.get('style_name', 'Unknown'),
-                    training_completed_at=datetime.utcnow().isoformat() + 'Z',
-                    final_loss=final_loss
-                )
-            
-            # 성공 콜백 실행
-            callback_url = message_data.get('callback_url')
-            if callback_url:
-                await self._send_completion_callback(callback_url, {
-                    'status': 'success',
-                    'output_name': output_name,
-                    'log_file': log_file
-                })
-            
-            logger.info(f"학습 성공 후작업 완료: {output_name}")
-            
-        except Exception as e:
-            logger.error(f"후작업 실행 중 오류: {e}")
-    
-    async def _post_training_failure(self, output_name: str, message_data: Dict[str, Any], 
-                                   log_file: str, return_code: int):
-        """
-        학습 실패 후작업
-        
-        Args:
-            output_name: 출력 모델 이름
-            message_data: 원본 메시지 데이터
-            log_file: 학습 로그 파일 경로
-            return_code: 프로세스 종료 코드
-        """
-        try:
-            logger.info(f"학습 실패 후작업 시작: {output_name}")
-            
-            # 1. 에러 로그에서 실패 원인 추출
-            error_info = await self._extract_error_from_log(log_file)
-            
-            # 2. FAILED 상태로 업데이트
+            # 예외 발생 시 FAILED 상태로 업데이트
             request_id = message_data.get('request_id')
             if request_id:
                 self._update_training_status(
                     request_id, 
                     'FAILED', 
-                    error_msg=error_info,
-                    style_name=message_data.get('style_name', 'Unknown'),
-                    training_failed_at=datetime.utcnow().isoformat() + 'Z',
-                    return_code=return_code
-                )
-            
-            # 3. 실패 콜백 실행
-            callback_url = message_data.get('callback_url')
-            if callback_url:
-                await self._send_completion_callback(callback_url, {
-                    'status': 'failed',
-                    'output_name': output_name,
-                    'return_code': return_code,
-                    'error_info': error_info,
-                    'log_file': log_file
-                })
-            
-            logger.info(f"학습 실패 후작업 완료: {output_name}")
-            
-        except Exception as e:
-            logger.error(f"실패 후작업 실행 중 오류: {e}")
-    
-    async def _post_training_error(self, output_name: str, message_data: Dict[str, Any], error_msg: str):
-        """
-        학습 예외 발생 후작업
-        
-        Args:
-            output_name: 출력 모델 이름
-            message_data: 원본 메시지 데이터
-            error_msg: 에러 메시지
-        """
-        try:
-            logger.info(f"학습 예외 후작업 시작: {output_name}")
-            
-            # FAILED 상태로 업데이트
-            request_id = message_data.get('request_id')
-            if request_id:
-                self._update_training_status(
-                    request_id, 
-                    'FAILED', 
-                    error_msg=error_msg,
+                    error_msg=str(e),
                     style_name=message_data.get('style_name', 'Unknown'),
                     training_failed_at=datetime.utcnow().isoformat() + 'Z'
                 )
-            
-            # 예외 콜백 실행
-            callback_url = message_data.get('callback_url')
-            if callback_url:
-                await self._send_completion_callback(callback_url, {
-                    'status': 'error',
-                    'output_name': output_name,
-                    'error_message': error_msg
-                })
-            
-            logger.info(f"학습 예외 후작업 완료: {output_name}")
-            
-        except Exception as e:
-            logger.error(f"예외 후작업 실행 중 오류: {e}")
-    
-    async def _extract_final_loss_from_log(self, log_file: str) -> str:
-        """로그 파일에서 최종 손실값 추출"""
-        try:
-            if not os.path.exists(log_file):
-                return None
-                
-            with open(log_file, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-                
-            # 마지막 몇 줄에서 loss 정보 찾기
-            for line in reversed(lines[-50:]):  # 마지막 50줄만 확인
-                if 'loss:' in line.lower():
-                    return line.strip()
-            
-            return None
-        except Exception as e:
-            logger.error(f"로그에서 손실값 추출 실패: {e}")
-            return None
-    
-    async def _extract_error_from_log(self, log_file: str) -> str:
-        """로그 파일에서 에러 정보 추출"""
-        try:
-            if not os.path.exists(log_file):
-                return "로그 파일을 찾을 수 없음"
-                
-            with open(log_file, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-                
-            # 에러 관련 키워드가 포함된 줄 찾기
-            error_keywords = ['error', 'exception', 'failed', 'traceback']
-            error_lines = []
-            
-            for line in reversed(lines[-100:]):  # 마지막 100줄만 확인
-                if any(keyword in line.lower() for keyword in error_keywords):
-                    error_lines.append(line.strip())
-                    if len(error_lines) >= 5:  # 최대 5줄
-                        break
-            
-            return '\n'.join(reversed(error_lines)) if error_lines else "구체적인 에러 정보 없음"
-            
-        except Exception as e:
-            logger.error(f"로그에서 에러 정보 추출 실패: {e}")
-            return f"에러 정보 추출 실패: {str(e)}"
-    
-    async def _send_completion_callback(self, callback_url: str, data: Dict[str, Any]):
-        """완료 콜백 전송 (HTTP POST)"""
-        try:
-            import aiohttp
-            
-            async with aiohttp.ClientSession() as session:
-                async with session.post(callback_url, json=data, timeout=30) as response:
-                    if response.status == 200:
-                        logger.info(f"콜백 전송 성공: {callback_url}")
-                    else:
-                        logger.warning(f"콜백 전송 실패: {response.status}")
-                        
-        except ImportError:
-            logger.warning("aiohttp가 설치되지 않아 콜백을 전송할 수 없습니다")
-        except Exception as e:
-            logger.error(f"콜백 전송 중 오류: {e}")
-    
-    async def _upload_to_s3(self, bucket_name: str, file_paths: list, output_name: str):
-        """S3에 모델 파일 업로드"""
-        try:
-            import aioboto3
-            
-            aws_access_key_id, aws_secret_access_key = self._get_aws_credentials()
-            
-            session = aioboto3.Session(
-                aws_access_key_id=aws_access_key_id,
-                aws_secret_access_key=aws_secret_access_key,
-                region_name=self.s3_region
-            )
-            async with session.client('s3') as s3:
-                for file_path in file_paths:
-                    if os.path.exists(file_path):
-                        file_name = os.path.basename(file_path)
-                        s3_key = f"models/{output_name}/{file_name}"
-                        
-                        await s3.upload_file(file_path, bucket_name, s3_key)
-                        logger.info(f"S3 업로드 완료: s3://{bucket_name}/{s3_key}")
-                        
-        except ImportError:
-            logger.warning("aioboto3가 설치되지 않아 S3 업로드를 건너뜁니다")
-        except Exception as e:
-            logger.error(f"S3 업로드 중 오류: {e}")
-    
     
     async def _process_message(self, message):
         """
@@ -857,11 +607,11 @@ class LoRATrainingHandler:
             # 학습 명령어 구성
             cmd, dirs = self._build_training_command(message_data)
             
-            # 비동기 학습 시작
+            # 백그라운드 학습 시작
             output_name = message_data.get('style_name', 'unknown_model')
-            asyncio.create_task(self._run_training_async(cmd, output_name, message_data, dirs))
+            self._run_training_background(cmd, output_name, message_data, dirs)
             
-            logger.info(f"학습 작업 큐에 추가됨: {output_name}")
+            logger.info(f"학습이 백그라운드에서 시작됨: {output_name}")
             
         except json.JSONDecodeError as e:
             traceback.print_exc()
@@ -1012,11 +762,6 @@ def main():
         asyncio.run(handler.start_polling())
     except KeyboardInterrupt:
         logger.info("프로그램 종료 요청됨")
-        # 실행 중인 프로세스들 정리
-        for process in handler.running_processes:
-            if process.returncode is None:
-                process.terminate()
-                logger.info(f"프로세스 종료: PID {process.pid}")
     except Exception as e:
         logger.error(f"프로그램 실행 중 오류: {e}")
         sys.exit(1)
