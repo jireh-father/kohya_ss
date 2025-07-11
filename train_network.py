@@ -990,6 +990,9 @@ if __name__ == "__main__":
     trainer = NetworkTrainer()
     try:
         trainer.train(args)
+        exit(0)
     except Exception as e:
         send_message_to_discord(f"error occurred during training: {args.output_name}\n{e}")
-        raise e
+        exit(1)
+        # raise e
+    
