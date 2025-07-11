@@ -491,7 +491,7 @@ class LoRATrainingHandler:
                     # 경로를 정규화하여 슬래시 사용
                     if 'dir' in key.lower() and isinstance(value, str):
                         value = value.replace('\\', '/')
-                    if value.isdigit():
+                    if isinstance(value, int) or value.isdigit():
                         cmd_parts.extend([f'--{key}', f'{str(value)}'])
                     else:
                         cmd_parts.extend([f'--{key}', f'"{str(value)}"'])
@@ -508,7 +508,7 @@ class LoRATrainingHandler:
                     # 경로를 정규화하여 슬래시 사용
                     if 'dir' in key.lower() and isinstance(value, str):
                         value = value.replace('\\', '/')
-                    if value.isdigit():
+                    if isinstance(value, int) or value.isdigit():
                         cmd.extend([f'--{key}', f'{str(value)}'])
                     else:
                         cmd.extend([f'--{key}', f'"{str(value)}"'])
