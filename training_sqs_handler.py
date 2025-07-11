@@ -12,15 +12,21 @@ import subprocess
 import sys
 from typing import Dict, Any
 import traceback
+import time
+from datetime import datetime
 
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 from dotenv import load_dotenv
+import firebase_admin
+from firebase_admin import credentials, db
 
 # .env 파일 로딩
 load_dotenv()
 
 SQS_URL_LORA_TRAINING = os.getenv('SQS_URL_LORA_TRAINING')
+FIREBASE_SERVICE_ACCOUNT_KEY = os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY')
+FIREBASE_DATABASE_URL = os.getenv('FIREBASE_DATABASE_URL')
 
 # 로깅 설정
 logging.basicConfig(
@@ -63,6 +69,7 @@ class LoRATrainingHandler:
         self.s3_bucket_name = s3_bucket_name
         self.s3_region = s3_region or region_name
         self.conda_env = conda_env
+        self.firebase_initialized = False
         
     def _get_aws_credentials(self) -> tuple:
         """
@@ -117,6 +124,109 @@ class LoRATrainingHandler:
         except Exception as e:
             logger.error(f"S3 클라이언트 초기화 실패: {e}")
             sys.exit(1)
+    
+    def _init_firebase_client(self):
+        """Firebase 클라이언트 초기화"""
+        try:
+            if self.firebase_initialized:
+                return
+            
+            if not FIREBASE_SERVICE_ACCOUNT_KEY:
+                logger.error("FIREBASE_SERVICE_ACCOUNT_KEY 환경변수가 설정되지 않았습니다.")
+                sys.exit(1)
+                
+            if not FIREBASE_DATABASE_URL:
+                logger.error("FIREBASE_DATABASE_URL 환경변수가 설정되지 않았습니다.")
+                sys.exit(1)
+            
+            # Firebase Admin SDK 초기화
+            if not firebase_admin._apps:
+                # 서비스 계정 키 파일 경로 또는 딕셔너리 확인
+                if os.path.isfile(FIREBASE_SERVICE_ACCOUNT_KEY):
+                    # 파일 경로인 경우
+                    cred = credentials.Certificate(FIREBASE_SERVICE_ACCOUNT_KEY)
+                else:
+                    # JSON 문자열인 경우
+                    service_account_info = json.loads(FIREBASE_SERVICE_ACCOUNT_KEY)
+                    cred = credentials.Certificate(service_account_info)
+                
+                firebase_admin.initialize_app(cred, {
+                    'databaseURL': FIREBASE_DATABASE_URL
+                })
+                logger.info("Firebase Admin SDK 초기화 완료")
+            
+            self.firebase_initialized = True
+            
+        except json.JSONDecodeError:
+            logger.error("FIREBASE_SERVICE_ACCOUNT_KEY JSON 형식이 올바르지 않습니다.")
+            sys.exit(1)
+        except Exception as e:
+            logger.error(f"Firebase 클라이언트 초기화 실패: {e}")
+            sys.exit(1)
+    
+    def _update_training_status(self, request_id: str, status: str, error_msg: str = None, **kwargs):
+        """
+        Firebase Realtime Database에 학습 상태 업데이트
+        
+        Args:
+            request_id: 요청 ID
+            status: 상태 (REQUESTED, TRAINING, SUCCESS, FAILED)
+            error_msg: 에러 메시지 (실패 시)
+            **kwargs: 추가 필드
+        """
+        try:
+            if not self.firebase_initialized:
+                self._init_firebase_client()
+            
+            # UTC 타임스탬프 생성
+            timestamp = int(time.time())
+            
+            # 상태 데이터 구성
+            status_data = {
+                'status': status,
+                'timestamp': timestamp,
+                'updated_at': datetime.utcnow().isoformat() + 'Z'
+            }
+            
+            # 에러 메시지가 있으면 추가
+            if error_msg:
+                status_data['error_msg'] = error_msg
+            
+            # 추가 필드들 병합
+            status_data.update(kwargs)
+            
+            # Firebase에 상태 업데이트
+            ref = db.reference(f'train_status/{request_id}')
+            ref.set(status_data)
+            
+            logger.info(f"학습 상태 업데이트 완료 - request_id: {request_id}, status: {status}")
+            
+        except Exception as e:
+            logger.error(f"학습 상태 업데이트 실패: {e}")
+            # Firebase 상태 업데이트 실패해도 학습은 계속 진행
+    
+    def _get_training_status(self, request_id: str) -> Dict[str, Any]:
+        """
+        Firebase Realtime Database에서 학습 상태 조회
+        
+        Args:
+            request_id: 요청 ID
+            
+        Returns:
+            상태 데이터 딕셔너리
+        """
+        try:
+            if not self.firebase_initialized:
+                self._init_firebase_client()
+            
+            ref = db.reference(f'train_status/{request_id}')
+            status_data = ref.get()
+            
+            return status_data or {}
+            
+        except Exception as e:
+            logger.error(f"학습 상태 조회 실패: {e}")
+            return {}
     
     def _create_directory_structure(self, request_id: str) -> Dict[str, str]:
         """
@@ -408,6 +518,16 @@ class LoRATrainingHandler:
             logger.info(f"학습 시작: {output_name}")
             logger.info(f"실행 명령어: {' '.join(cmd)}")
             
+            # 학습 시작 시 TRAINING 상태로 업데이트
+            request_id = message_data.get('request_id')
+            if request_id:
+                self._update_training_status(
+                    request_id, 
+                    'TRAINING', 
+                    style_name=message_data.get('style_name', 'Unknown'),
+                    training_started_at=datetime.utcnow().isoformat() + 'Z'
+                )
+            
             # 로그 파일 경로 설정 - base_dir/train.log
             log_file = os.path.join(dirs['base_dir'], 'train.log')
             
@@ -497,7 +617,33 @@ class LoRATrainingHandler:
             log_file: 학습 로그 파일 경로
         """
         try:
-            pass
+            logger.info(f"학습 성공 후작업 시작: {output_name}")
+            
+            # SUCCESS 상태로 업데이트
+            request_id = message_data.get('request_id')
+            if request_id:
+                # 로그에서 최종 손실값 추출
+                final_loss = await self._extract_final_loss_from_log(log_file)
+                
+                self._update_training_status(
+                    request_id, 
+                    'SUCCESS', 
+                    style_name=message_data.get('style_name', 'Unknown'),
+                    training_completed_at=datetime.utcnow().isoformat() + 'Z',
+                    final_loss=final_loss
+                )
+            
+            # 성공 콜백 실행
+            callback_url = message_data.get('callback_url')
+            if callback_url:
+                await self._send_completion_callback(callback_url, {
+                    'status': 'success',
+                    'output_name': output_name,
+                    'log_file': log_file
+                })
+            
+            logger.info(f"학습 성공 후작업 완료: {output_name}")
+            
         except Exception as e:
             logger.error(f"후작업 실행 중 오류: {e}")
     
@@ -518,7 +664,19 @@ class LoRATrainingHandler:
             # 1. 에러 로그에서 실패 원인 추출
             error_info = await self._extract_error_from_log(log_file)
             
-            # 2. 실패 콜백 실행
+            # 2. FAILED 상태로 업데이트
+            request_id = message_data.get('request_id')
+            if request_id:
+                self._update_training_status(
+                    request_id, 
+                    'FAILED', 
+                    error_msg=error_info,
+                    style_name=message_data.get('style_name', 'Unknown'),
+                    training_failed_at=datetime.utcnow().isoformat() + 'Z',
+                    return_code=return_code
+                )
+            
+            # 3. 실패 콜백 실행
             callback_url = message_data.get('callback_url')
             if callback_url:
                 await self._send_completion_callback(callback_url, {
@@ -528,7 +686,6 @@ class LoRATrainingHandler:
                     'error_info': error_info,
                     'log_file': log_file
                 })
-            
             
             logger.info(f"학습 실패 후작업 완료: {output_name}")
             
@@ -546,6 +703,17 @@ class LoRATrainingHandler:
         """
         try:
             logger.info(f"학습 예외 후작업 시작: {output_name}")
+            
+            # FAILED 상태로 업데이트
+            request_id = message_data.get('request_id')
+            if request_id:
+                self._update_training_status(
+                    request_id, 
+                    'FAILED', 
+                    error_msg=error_msg,
+                    style_name=message_data.get('style_name', 'Unknown'),
+                    training_failed_at=datetime.utcnow().isoformat() + 'Z'
+                )
             
             # 예외 콜백 실행
             callback_url = message_data.get('callback_url')
@@ -659,7 +827,17 @@ class LoRATrainingHandler:
         try:
             # 메시지 본문 파싱
             message_data = json.loads(message['Body'])
-            logger.info(f"메시지 수신: {message_data.get('style_name', 'Unknown')}")
+            request_id = message_data.get('request_id')
+            logger.info(f"메시지 수신: {message_data.get('style_name', 'Unknown')}, request_id: {request_id}")
+            
+            # 즉시 REQUESTED 상태로 설정
+            if request_id:
+                self._update_training_status(
+                    request_id, 
+                    'REQUESTED', 
+                    style_name=message_data.get('style_name', 'Unknown'),
+                    message_received_at=datetime.utcnow().isoformat() + 'Z'
+                )
             
             # 메시지 즉시 삭제
             receipt_handle = message['ReceiptHandle']
@@ -687,6 +865,21 @@ class LoRATrainingHandler:
         except Exception as e:
             traceback.print_exc()
             logger.error(f"메시지 처리 중 오류: {e}")
+            
+            # 메시지 처리 실패 시 상태 업데이트
+            request_id = None
+            try:
+                message_data = json.loads(message['Body'])
+                request_id = message_data.get('request_id')
+            except:
+                pass
+            
+            if request_id:
+                self._update_training_status(
+                    request_id, 
+                    'FAILED', 
+                    error_msg=f"메시지 처리 중 오류: {str(e)}"
+                )
     
     async def start_polling(self):
         """SQS 폴링 시작"""
