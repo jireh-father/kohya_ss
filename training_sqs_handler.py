@@ -27,6 +27,7 @@ load_dotenv()
 SQS_URL_LORA_TRAINING = os.getenv('SQS_URL_LORA_TRAINING')
 FIREBASE_SERVICE_ACCOUNT_KEY = os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY')
 FIREBASE_DATABASE_URL = os.getenv('FIREBASE_DATABASE_URL')
+PRETRAINED_MODEL_PATH = os.getenv('PRETRAINED_MODEL_PATH')
 
 # 로깅 설정
 logging.basicConfig(
@@ -460,10 +461,10 @@ class LoRATrainingHandler:
             # 'sample_prompts': f'{self.identifier}, {hair_length}',
             # 'sample_sampler': 'k_dpm_2',
             # 고정 파라미터
-            'pretrained_model_name_or_path': 'runwayml/stable-diffusion-v1-5',
+            'pretrained_model_name_or_path': PRETRAINED_MODEL_PATH,
             'train_data_dir': os.path.dirname(dirs['img_dir']),
             'output_dir': dirs['model_dir'],
-            'output_name': message_data['style_name'],
+            'output_name': request_id,
             'logging_dir': dirs['log_dir'],
             'is_executed_by_sqs': True,
             'request_id': request_id
