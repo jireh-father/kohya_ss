@@ -465,7 +465,8 @@ class LoRATrainingHandler:
             'output_dir': dirs['model_dir'],
             'output_name': message_data['style_name'],
             'logging_dir': dirs['log_dir'],
-            'is_executed_by_sqs': True
+            'is_executed_by_sqs': True,
+            'request_id': request_id
         }
         
         # 6. 메시지 데이터에서 오버라이드할 파라미터 설정

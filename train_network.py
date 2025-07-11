@@ -974,6 +974,13 @@ def setup_parser() -> argparse.ArgumentParser:
         nargs="*",
         help="multiplier for network weights to merge into the model before training / 学習前にあらかじめモデルにマージするnetworkの重みの倍率",
     )
+    # request_id
+    parser.add_argument(
+        "--request_id",
+        type=str,
+        default=None,
+        help="request id / 요청 ID",
+    )
     parser.add_argument(
         "--no_half_vae",
         action="store_true",
