@@ -550,7 +550,7 @@ class LoRATrainingHandler:
             else:
                 # Linux/Mac의 경우 - nohup 사용
                 cmd_str = ' '.join(cmd)
-                full_cmd = f'nohup {env_vars} {cmd_str} > "{log_file}" 2>&1 &'
+                full_cmd = f'{env_vars} nohup {cmd_str} > "{log_file}" 2>&1 &'
             
             logger.info(f"백그라운드 실행 명령어: {full_cmd}")
             
