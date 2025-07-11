@@ -412,7 +412,7 @@ class LoRATrainingHandler:
             else:  # Linux/Mac
                 cmd = [
                     'bash', '-c',
-                    f'source activate {self.conda_env} && accelerate launch --num_cpu_threads_per_process=2 ./train_network.py'
+                    f'conda activate {self.conda_env} && accelerate launch --num_cpu_threads_per_process=2 ./train_network.py'
                 ]
         else:
             # 현재 환경 사용
