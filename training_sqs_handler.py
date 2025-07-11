@@ -464,7 +464,8 @@ class LoRATrainingHandler:
             'train_data_dir': os.path.dirname(dirs['img_dir']),
             'output_dir': dirs['model_dir'],
             'output_name': message_data['style_name'],
-            'logging_dir': dirs['log_dir']
+            'logging_dir': dirs['log_dir'],
+            'is_executed_by_sqs': True
         }
         
         # 6. 메시지 데이터에서 오버라이드할 파라미터 설정
@@ -482,9 +483,8 @@ class LoRATrainingHandler:
             # Windows에서 conda 환경 사용 시 - 명령어 문자열에 파라미터 추가
             cmd_parts = []
             for key, value in params.items():
-                if key in ['enable_bucket', 'no_half_vae', 'cache_latents', 'xformers', 'bucket_no_upscale']:
-                    if value:
-                        cmd_parts.append(f'--{key}')
+                if value == True:
+                    cmd_parts.append(f'--{key}')
                 else:
                     # 경로를 정규화하여 슬래시 사용
                     if 'dir' in key.lower() and isinstance(value, str):
@@ -496,9 +496,8 @@ class LoRATrainingHandler:
         else:
             # 일반적인 경우
             for key, value in params.items():
-                if key in ['enable_bucket', 'no_half_vae', 'cache_latents', 'xformers', 'bucket_no_upscale']:
-                    if value:
-                        cmd.append(f'--{key}')
+                if value == True:
+                    cmd.append(f'--{key}')
                 else:
                     # 경로를 정규화하여 슬래시 사용
                     if 'dir' in key.lower() and isinstance(value, str):
