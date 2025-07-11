@@ -573,6 +573,7 @@ class LoRATrainingHandler:
                     )
                 else:
                     # Linux/Mac의 경우
+                    logger.info(f"cmd: {cmd}")
                     process = await asyncio.create_subprocess_exec(
                         *cmd,
                         stdout=log,
@@ -580,12 +581,14 @@ class LoRATrainingHandler:
                         cwd=os.getcwd(),
                         env=env
                     )
-                
+                logger.info(f"process: {process}")
+
                 self.running_processes.add(process)
                 logger.info(f"학습 프로세스 시작됨 - PID: {process.pid}, 로그: {log_file}")
                 
                 # 프로세스 완료 대기
                 await process.wait()
+                logger.info(f"process.returncode: {process.returncode}")
             
             # 로그 파일에서 실제 에러 확인
             if process.returncode == 0:
