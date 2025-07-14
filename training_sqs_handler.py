@@ -416,7 +416,7 @@ class LoRATrainingHandler:
                 f'{self.virtual_env_bin_path}/accelerate', 'launch',
                 '--num_processes=1',
                 '--num_cpu_threads_per_process=2',
-                './train_network.py'
+                './train_network_by_sqs.py'
             ]
         else:
             # 현재 환경 사용
@@ -424,7 +424,7 @@ class LoRATrainingHandler:
                 'accelerate', 'launch',
                 '--num_processes=1',
                 '--num_cpu_threads_per_process=2',
-                './train_network.py'
+                './train_network_by_sqs.py'
             ]
 
         if "hair" not in hair_length:

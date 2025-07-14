@@ -12,6 +12,7 @@ import toml
 
 from tqdm import tqdm
 import torch
+from datetime import datetime
 from accelerate.utils import set_seed
 from diffusers import DDPMScheduler
 from library import model_util
@@ -826,6 +827,9 @@ class NetworkTrainer:
                             ckpt_name = train_util.get_step_ckpt_name(args, "." + args.save_model_as, global_step)
                             save_model(ckpt_name, accelerator.unwrap_model(network), global_step, epoch)
 
+                            if args.is_executed_by_sqs:
+                                gen_sample_image(ckpt_name)
+
                             if args.save_state:
                                 train_util.save_and_remove_state_stepwise(args, accelerator, global_step)
 
@@ -973,13 +977,56 @@ def setup_parser() -> argparse.ArgumentParser:
         nargs="*",
         help="multiplier for network weights to merge into the model before training / 学習前にあらかじめモデルにマージするnetworkの重みの倍率",
     )
+    # request_id
+    parser.add_argument(
+        "--request_id",
+        type=str,
+        default=None,
+        help="request id / 요청 ID",
+    )
     parser.add_argument(
         "--no_half_vae",
         action="store_true",
         help="do not use fp16/bf16 VAE in mixed precision (use float VAE) / mixed precisionでも fp16/bf16 VAEを使わずfloat VAEを使う",
     )
+    parser.add_argument("--is_executed_by_sqs", action="store_true", help="is executed by sqs / sqs에서 실행되었는지 여부")
     return parser
 
+def _update_training_status(request_id: str, status: str, error_msg: str = None, **kwargs):
+        """
+        Firebase Realtime Database에 학습 상태 업데이트
+        
+        Args:
+            request_id: 요청 ID
+            status: 상태 (REQUESTED, TRAINING, SUCCESS, FAILED)
+            error_msg: 에러 메시지 (실패 시)
+            **kwargs: 추가 필드
+        """
+        try:
+            # UTC 타임스탬프 생성
+            timestamp = int(time.time())
+            
+            # 상태 데이터 구성
+            status_data = {
+                'status': status,
+                'timestamp': timestamp,
+                'updated_at': datetime.utcnow().isoformat() + 'Z'
+            }
+            
+            # 에러 메시지가 있으면 추가
+            if error_msg:
+                status_data['error_msg'] = error_msg
+            
+            # 추가 필드들 병합
+            status_data.update(kwargs)
+            
+            # Firebase에 상태 업데이트
+            ref = db.reference(f'train_status/{request_id}')
+            ref.set(status_data)
+            
+            print(f"학습 상태 업데이트 완료 - request_id: {request_id}, status: {status}")
+        except Exception as e:
+            print(f"학습 상태 업데이트 실패: {e}")
 
 if __name__ == "__main__":
     parser = setup_parser()
@@ -987,12 +1034,73 @@ if __name__ == "__main__":
     args = parser.parse_args()
     args = train_util.read_config_from_file(args, parser)
 
+    if args.is_executed_by_sqs:
+        output_dir = args.output_dir
+        import boto3
+        from botocore.exceptions import ClientError, NoCredentialsError
+        from dotenv import load_dotenv
+        import firebase_admin
+        from firebase_admin import credentials, db
+
+        # .env 파일 로딩
+        load_dotenv()
+
+        SQS_URL_LORA_TRAINING = os.getenv('SQS_URL_LORA_TRAINING')
+        FIREBASE_SERVICE_ACCOUNT_KEY = os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY')
+        FIREBASE_DATABASE_URL = os.getenv('FIREBASE_DATABASE_URL')
+        REGION_NAME = os.getenv('REGION_NAME')
+        AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+        AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+        S3_BUCKET_NAME = os.getenv('S3_BUCKET_NAME')
+
+        cred = credentials.Certificate(FIREBASE_SERVICE_ACCOUNT_KEY)
+        firebase_admin.initialize_app(cred, {
+            'databaseURL': FIREBASE_DATABASE_URL
+        })
+
+            
+        s3 = boto3.client(
+            's3',
+            region_name=REGION_NAME,
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY
+        )
+
+        
+
+
     trainer = NetworkTrainer()
     try:
         trainer.train(args)
-        exit(0)
+        print("training finished")
+        if args.is_executed_by_sqs:
+            # output_dir의 .safetensors 파일들을 S3에 업로드 (custom_hairstyle_models/{request_id}/)
+            import glob
+            import os
+            
+            # output_dir에서 .safetensors 파일들 찾기
+            safetensors_files = glob.glob(os.path.join(output_dir, "*.safetensors"))
+            
+            for file_path in safetensors_files:
+                filename = os.path.basename(file_path)
+                s3_key = f'custom_hairstyle_models/{args.request_id}/{filename}'
+                
+                try:
+                    # args = {'ACL': 'public-read',}
+
+                    s3.upload_file(
+                        file_path,
+                        S3_BUCKET_NAME,
+                        s3_key,
+                        # ExtraArgs=args
+                    )
+                    print(f"S3 업로드 완료: {filename} -> s3://{S3_BUCKET_NAME}/{s3_key}")
+                except Exception as e:
+                    print(f"S3 업로드 실패 {filename}: {e}")
+            _update_training_status(args.request_id, 'SUCCESS')
     except Exception as e:
         send_message_to_discord(f"error occurred during training: {args.output_name}\n{e}")
-        exit(1)
-        # raise e
+        if args.is_executed_by_sqs:
+            _update_training_status(args.request_id, 'FAILED', error_msg=str(e))
+        raise e
     
