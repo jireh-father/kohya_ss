@@ -9,6 +9,7 @@ import time
 import json
 from multiprocessing import Value
 import toml
+import uuid
 
 from tqdm import tqdm
 import torch
@@ -38,9 +39,14 @@ from library.custom_train_functions import (
 from discord import send_message_to_discord
 
 class NetworkTrainer:
-    def __init__(self):
+    def __init__(self, style_name=None, style_type=None, hair_length=None, bangs=None, gender=None):
         self.vae_scale_factor = 0.18215
         self.is_sdxl = False
+        self.style_name = style_name
+        self.style_type = style_type
+        self.hair_length = hair_length
+        self.bangs = bangs
+        self.gender = gender
 
     # TODO 他のスクリプトと共通化する
     def generate_step_logs(
@@ -116,6 +122,99 @@ class NetworkTrainer:
 
     def sample_images(self, accelerator, args, epoch, global_step, device, vae, tokenizer, text_encoder, unet):
         train_util.sample_images(accelerator, args, epoch, global_step, device, vae, tokenizer, text_encoder, unet)
+
+    def gen_sample_image(self, ckpt_name, output_dir):
+        ckpt_file = os.path.join(output_dir, ckpt_name)
+        # UPLOAD MODEL TO s3
+
+        # sqs 생성 요청, 요청시 download_model 파라미터 받도록 수정, 로컬에 있는지 체크하고 없으면 s3에서 다운
+        if self.style_type == "hairstyle":
+
+            params = {}
+            params['request_hash'] = str(uuid.uuid4())
+            params['generator_type'] = "hairstyle_inpaint"
+
+            params['hair_length'] = self.hair_length if "hair" not in self.hair_length else f"{self.hair_length} hair"
+            if self.bangs == "bangs":
+                params['bangs'] = "see-through bangs"
+            params['style_preset_name'] = ckpt_name
+
+            params['hair_color'] = "black hair"
+
+            params['gender'] = self.gender
+            params['image_hash'] = image_hash
+
+            sqs.send_sqs_message(SQS_URL_COMFYUI, json.dumps(params))
+            # save data to rdb, data is training epoch, training request_id, gen url, gen params etc
+            gen_url = f"https://{S3_BUCKET_NAME}.s3.{S3_REGION}.amazonaws.com/{S3_GEN_IMAGE_DIR}/{request_hash}_0.jpg"
+
+
+        elif self.style_type == "dye":
+            if dye_color is None and bleach_color is None:
+                raise ValueError("dye_color or bleach_color is required")
+            
+            request_hash = str(uuid.uuid4())
+            coin_log = CoinLog(
+                user_id=user_id,
+                num_coins=NUM_GEN_COINS,
+                reason_type="dye_inpaint_try",
+                reason_data=json.dumps({
+                    "generation_group_id": generation_group_id,
+                    "request_id": request_hash
+                })
+            )
+            db.add(coin_log)
+
+            if not seed:
+                seed = random.randint(0, 1000000000)
+
+            params = {}
+            params['request_hash'] = request_hash
+            params['generator_type'] = "dye_inpaint"
+            # params['generator_type'] = "hair_dye_inpaint_v2_cache"
+            params['seed'] = seed
+            params['image_hash'] = image_hash
+            params['use_gen_status'] = use_gen_status
+            params['hair_color'] = dye_color if dye_color else bleach_color
+            params['dye_type'] = "dye" if dye_color else "bleach"
+            params['fb_app_name'] = "hairmodelmake"
+            sqs.send_sqs_message(SQS_URL_COMFYUI, json.dumps(params))
+            if generation_group_id:
+                generation = Generation(
+                    generation_group_id=generation_group_id,
+                    request_id=request_hash,
+                    image_url=f"https://{S3_BUCKET_NAME}.s3.{S3_REGION}.amazonaws.com/{S3_GEN_IMAGE_DIR}/{request_hash}_0.jpg",
+                    seed=seed,
+                    params_json=json.dumps(params, ensure_ascii=False)
+                )
+                db.add(generation)
+                generation_id = generation.id
+            else:
+                generation_id = None
+
+            coin = db.query(Coin).filter(Coin.user_id == user_id).with_for_update().first()
+            if coin is None:
+                raise HTTPException(status_code=404, detail="Coin not found")
+            if coin.num_coins < NUM_GEN_COINS:
+                raise HTTPException(status_code=402, detail="Coin is not enough")
+            coin.num_coins -= NUM_GEN_COINS
+            try:
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                raise HTTPException(status_code=500, detail=str(e))
+
+            return {
+                "polling_image_url": f"https://{S3_BUCKET_NAME}.s3.{S3_REGION}.amazonaws.com/{S3_GEN_IMAGE_DIR}/{request_hash}_0.jpg",
+                "seed": seed,
+                "request_id": request_hash,
+                "params": params,
+                "generation_id": generation_id
+            }
+        else:
+            raise ValueError(f"Invalid style type: {self.style_type}")
+
+
 
     def train(self, args):
         session_id = random.randint(0, 2**32)
@@ -828,7 +927,7 @@ class NetworkTrainer:
                             save_model(ckpt_name, accelerator.unwrap_model(network), global_step, epoch)
 
                             if args.is_executed_by_sqs:
-                                gen_sample_image(ckpt_name)
+                                self.gen_sample_image(ckpt_name, args.output_dir)
 
                             if args.save_state:
                                 train_util.save_and_remove_state_stepwise(args, accelerator, global_step)
@@ -985,6 +1084,36 @@ def setup_parser() -> argparse.ArgumentParser:
         help="request id / 요청 ID",
     )
     parser.add_argument(
+        "--style_name",
+        type=str,
+        default=None,
+        help="style name / 스타일 이름",
+    )
+    parser.add_argument(
+        "--style_type",
+        type=str,
+        default=None, #hairstyle, dye
+        help="style type / 스타일 타입",
+    )
+    parser.add_argument(
+        "--hair_length",
+        type=str,
+        default=None, #short, medium, long, bob
+        help="hair length / 머리 길이",
+    )
+    parser.add_argument(
+        "--bangs",
+        type=str,
+        default=None, #bangs, no_bangs
+        help="bangs / 머리 모양",
+    )
+    parser.add_argument(
+        "--gender",
+        type=str,
+        default=None, #male, female
+        help="gender / 성별",
+    )
+    parser.add_argument(
         "--no_half_vae",
         action="store_true",
         help="do not use fp16/bf16 VAE in mixed precision (use float VAE) / mixed precisionでも fp16/bf16 VAEを使わずfloat VAEを使う",
@@ -1069,7 +1198,7 @@ if __name__ == "__main__":
         
 
 
-    trainer = NetworkTrainer()
+    trainer = NetworkTrainer(style_name=args.style_name, style_type=args.style_type, hair_length=args.hair_length, bangs=args.bangs, gender=args.gender)
     try:
         trainer.train(args)
         print("training finished")

@@ -396,6 +396,8 @@ class LoRATrainingHandler:
         hair_length = message_data['hair_length']
         style_type = message_data['style_type']
         style_name = message_data['style_name']
+        bangs = message_data['bangs']
+        gender = message_data['gender']
         
         # 1. 디렉토리 구조 생성
         dirs = self._create_directory_structure(request_id)
@@ -467,7 +469,12 @@ class LoRATrainingHandler:
             'output_name': request_id,
             'logging_dir': dirs['log_dir'],
             'is_executed_by_sqs': True,
-            'request_id': request_id
+            'request_id': request_id,
+            'style_name': style_name,
+            'style_type': style_type,
+            'hair_length': hair_length,
+            'bangs': bangs,
+            'gender': gender
         }
         
         # 6. 메시지 데이터에서 오버라이드할 파라미터 설정
