@@ -27,6 +27,8 @@ load_dotenv()
 SQS_URL_LORA_TRAINING = os.getenv('SQS_URL_LORA_TRAINING')
 FIREBASE_SERVICE_ACCOUNT_KEY = os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY')
 FIREBASE_DATABASE_URL = os.getenv('FIREBASE_DATABASE_URL')
+FIREBASE_DATABASE_URL_HMM = os.getenv('FIREBASE_DATABASE_URL_HMM')
+FIREBASE_SERVICE_ACCOUNT_KEY_HMM = os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY_HMM')
 PRETRAINED_MODEL_PATH = os.getenv('PRETRAINED_MODEL_PATH')
 
 # 로깅 설정
@@ -41,7 +43,11 @@ class LoRATrainingHandler:
     def __init__(self, queue_url: str, region_name: str = 'ap-northeast-2', identifier: str = 'shs', 
                  tmp_dir: str = './work_dir', sqs_max_messages: int = 10, 
                  sqs_visibility_timeout: int = 3, sqs_wait_time: int = 20,
-                 s3_bucket_name: str = None, s3_region: str = None, virtual_env_bin_path: str = None):
+                 s3_bucket_name: str = None, s3_region: str = None, virtual_env_bin_path: str = None,
+                 sample_seed: int = 123456, sample_epoch_interval: int = 50,
+                 sample_start_epoch: int = 100,
+                 sample_female_hairstyle_image_hash: str = None, sample_male_hairstyle_image_hash: str = None,
+                 sample_female_dye_image_hash: str = None, sample_male_dye_image_hash: str = None):
         """
         SQS LoRA 학습 핸들러 초기화
         
@@ -61,7 +67,7 @@ class LoRATrainingHandler:
         self.region_name = region_name
         self.sqs = None
         self.s3 = None
-
+        self.fb_app_name = None
         self.identifier = identifier
         self.tmp_dir = tmp_dir
         self.sqs_max_messages = sqs_max_messages
@@ -71,6 +77,15 @@ class LoRATrainingHandler:
         self.s3_region = s3_region or region_name
         self.virtual_env_bin_path = virtual_env_bin_path
         self.firebase_initialized = False
+        self.sample_seed = sample_seed
+        self.sample_epoch_interval = sample_epoch_interval
+        self.sample_start_epoch = sample_start_epoch
+        self.sample_female_hairstyle_image_hash = sample_female_hairstyle_image_hash
+        self.sample_male_hairstyle_image_hash = sample_male_hairstyle_image_hash
+        self.sample_female_dye_image_hash = sample_female_dye_image_hash
+        self.sample_male_dye_image_hash = sample_male_dye_image_hash
+        self.default_fb_app = None
+        self.fb_app_hmm = None
         
     def _get_aws_credentials(self) -> tuple:
         """
@@ -143,17 +158,16 @@ class LoRATrainingHandler:
             # Firebase Admin SDK 초기화
             if not firebase_admin._apps:
                 # 서비스 계정 키 파일 경로 또는 딕셔너리 확인
-                if os.path.isfile(FIREBASE_SERVICE_ACCOUNT_KEY):
-                    # 파일 경로인 경우
-                    cred = credentials.Certificate(FIREBASE_SERVICE_ACCOUNT_KEY)
-                else:
-                    # JSON 문자열인 경우
-                    service_account_info = json.loads(FIREBASE_SERVICE_ACCOUNT_KEY)
-                    cred = credentials.Certificate(service_account_info)
+                cred = credentials.Certificate(FIREBASE_SERVICE_ACCOUNT_KEY)
                 
-                firebase_admin.initialize_app(cred, {
+                self.default_fb_app = firebase_admin.initialize_app(cred, {
                     'databaseURL': FIREBASE_DATABASE_URL
                 })
+
+                self.fb_app_hmm = firebase_admin.initialize_app(cred, {
+                    'databaseURL': FIREBASE_DATABASE_URL_HMM
+                }, name='hairmodelmake')
+
                 logger.info("Firebase Admin SDK 초기화 완료")
             
             self.firebase_initialized = True
@@ -197,7 +211,10 @@ class LoRATrainingHandler:
             status_data.update(kwargs)
             
             # Firebase에 상태 업데이트
-            ref = db.reference(f'train_status/{request_id}')
+            if self.fb_app_name == 'hairmodelmake':
+                ref = db.reference(f'train_status/{request_id}')
+            else:
+                ref = db.reference(f'train_status/{request_id}', app=self.fb_app_hmm)
             ref.set(status_data)
             
             logger.info(f"학습 상태 업데이트 완료 - request_id: {request_id}, status: {status}")
@@ -220,7 +237,10 @@ class LoRATrainingHandler:
             if not self.firebase_initialized:
                 self._init_firebase_client()
             
-            ref = db.reference(f'train_status/{request_id}')
+            if self.fb_app_name == 'hairmodelmake':
+                ref = db.reference(f'train_status/{request_id}')
+            else:
+                ref = db.reference(f'train_status/{request_id}', app=self.fb_app_hmm)
             status_data = ref.get()
             
             return status_data or {}
@@ -431,7 +451,18 @@ class LoRATrainingHandler:
 
         if "hair" not in hair_length:
             hair_length = f"{hair_length} hair"
-        
+        sample_image_hash = None
+        if style_type == "hairstyle":
+            if gender == "female":
+                sample_image_hash = self.sample_female_hairstyle_image_hash
+            else:
+                sample_image_hash = self.sample_male_hairstyle_image_hash
+        else:
+            if gender == "female":
+                sample_image_hash = self.sample_female_dye_image_hash
+            else:
+                sample_image_hash = self.sample_male_dye_image_hash
+
         # 5. 기본 파라미터 설정
         default_params = {
             'enable_bucket': True,
@@ -468,14 +499,20 @@ class LoRATrainingHandler:
             'output_dir': dirs['model_dir'],
             'output_name': request_id,
             'logging_dir': dirs['log_dir'],
-            'is_executed_by_sqs': True,
+            'sample_image_hash': sample_image_hash,
+            'sample_start_epoch': self.sample_start_epoch,
+            'sample_epoch_interval': self.sample_epoch_interval,
+            'sample_seed': self.sample_seed,
             'request_id': request_id,
             'style_name': style_name,
             'style_type': style_type,
             'hair_length': hair_length,
             'bangs': bangs,
-            'gender': gender
+            'gender': gender,
         }
+
+        if 'fb_app_name' in message_data and message_data['fb_app_name'] is not None:
+            default_params['fb_app_name'] = message_data['fb_app_name']
         
         # 6. 메시지 데이터에서 오버라이드할 파라미터 설정
         override_params = {
@@ -590,6 +627,7 @@ class LoRATrainingHandler:
         try:
             # 메시지 본문 파싱
             message_data = json.loads(message['Body'])
+            self.fb_app_name = message_data['fb_app_name'] if 'fb_app_name' in message_data and message_data['fb_app_name'] is not None else None
             request_id = message_data.get('request_id')
             logger.info(f"메시지 수신: {message_data.get('style_name', 'Unknown')}, request_id: {request_id}")
             
@@ -744,7 +782,47 @@ def main():
         default='/home/ilseo/source/kohya_ss/venv/bin',
         help='사용할 conda 환경명 (지정하지 않으면 현재 환경 사용)'
     )
-    
+    # sample_seed
+    parser.add_argument(
+        '--sample-seed',
+        default=123456,
+        help='샘플링 시드 (기본값: 123456)'
+    )
+    parser.add_argument(
+        '--sample-epoch-interval',
+        default=50,
+        help='샘플링 주기 (기본값: 50)'
+    )
+    # sample_start_epoch
+    parser.add_argument(
+        '--sample-start-epoch',
+        default=100,
+        help='샘플링 시작 에포크 (기본값: 0)'
+    )
+    # sample_female_hairstyle_image_hash
+    parser.add_argument(
+        '--sample-female-hairstyle-image-hash',
+        default='08a2dbdec3f1caaf3c2b685262abf2a34d293279',
+        help='샘플링 여성 머리스타일 이미지 해시 (기본값: None)'
+    )
+    # sample_male_hairstyle_image_hash
+    parser.add_argument(
+        '--sample-male-hairstyle-image-hash',
+        default='0b1b42ce4ce71b8bf748d070543d1a64ba6d8e9d',
+        help='샘플링 남성 머리스타일 이미지 해시 (기본값: None)'
+    )
+    # sample_female_dye_image_hash
+    parser.add_argument(
+        '--sample-female-dye-image-hash',
+        default='71c5bc1e8840e6360f70399e610d01d9aa8d0d6c',
+        help='샘플링 여성 염색 이미지 해시 (기본값: None)'
+    )
+    # sample_male_dye_image_hash
+    parser.add_argument(
+        '--sample-male-dye-image-hash',
+        default='7b68ead24f5e06438ded3c8115282f15763c2a42',
+        help='샘플링 남성 염색 이미지 해시 (기본값: None)'
+    )
     args = parser.parse_args()
     
     # 로그 레벨 설정
@@ -761,7 +839,14 @@ def main():
         args.sqs_wait_time_seconds,
         args.s3_bucket_name,
         args.s3_region,
-        args.virtual_env_bin_path
+        args.virtual_env_bin_path,
+        args.sample_seed,
+        args.sample_epoch_interval,
+        args.sample_start_epoch,
+        args.sample_female_hairstyle_image_hash,
+        args.sample_male_hairstyle_image_hash,
+        args.sample_female_dye_image_hash,
+        args.sample_male_dye_image_hash
     )
     
     try:
