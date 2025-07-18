@@ -212,9 +212,9 @@ class LoRATrainingHandler:
             
             # Firebase에 상태 업데이트
             if self.fb_app_name == 'hairmodelmake':
-                ref = db.reference(f'train_status/{request_id}')
-            else:
                 ref = db.reference(f'train_status/{request_id}', app=self.fb_app_hmm)
+            else:
+                ref = db.reference(f'train_status/{request_id}')
             ref.set(status_data)
             
             logger.info(f"학습 상태 업데이트 완료 - request_id: {request_id}, status: {status}")
@@ -238,9 +238,9 @@ class LoRATrainingHandler:
                 self._init_firebase_client()
             
             if self.fb_app_name == 'hairmodelmake':
-                ref = db.reference(f'train_status/{request_id}')
-            else:
                 ref = db.reference(f'train_status/{request_id}', app=self.fb_app_hmm)
+            else:
+                ref = db.reference(f'train_status/{request_id}')
             status_data = ref.get()
             
             return status_data or {}

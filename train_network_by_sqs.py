@@ -185,6 +185,8 @@ class NetworkTrainer:
         except Exception as e:
             print(f"S3 업로드 실패 {ckpt_name}: {e}")
             raise e
+        
+        os.unlink(ckpt_file)
 
         # sqs 생성 요청, 요청시 download_model 파라미터 받도록 수정, 로컬에 있는지 체크하고 없으면 s3에서 다운
         params = {}
@@ -214,6 +216,7 @@ class NetworkTrainer:
         params['lora_download_s3_key'] = s3_key
         if self.fb_app_name == 'hairmodelmake':
             params['fb_app_name'] = self.fb_app_name
+        print(f"gen sample image params: {params}")
         sqs.send_message(QueueUrl=SQS_URL_COMFYUI, MessageBody=json.dumps(params))
         # save data to rdb, data is training epoch, training request_id, gen url, gen params etc
         gen_url = f"https://{S3_BUCKET_NAME}.s3.{REGION_NAME}.amazonaws.com/{S3_GEN_IMAGE_DIR}/{request_id}_0.jpg"
@@ -248,11 +251,14 @@ class NetworkTrainer:
         if generation_complete.wait(timeout=timeout_seconds):
             # 이벤트가 발생한 경우
             if generation_success:
+                print(f"gen sample image success: {gen_url}")
                 _update_training_status(request_id, None, self.fb_app_name, sample_epoch=epoch, sample_image_url=gen_url)
             else:
+                print(f"gen sample image failed: {gen_url}")
                 _update_training_status(request_id, None, self.fb_app_name, sample_epoch=epoch, sample_image_url=None)
         else:
             # 타임아웃 발생
+            print(f"gen sample image timeout: {gen_url}")
             _update_training_status(request_id, None, self.fb_app_name, sample_epoch=epoch, sample_image_url=None)
         
         # 리스너 해제 후 ref 삭제
