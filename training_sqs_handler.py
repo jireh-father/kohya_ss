@@ -449,7 +449,7 @@ class LoRATrainingHandler:
                 './train_network_by_sqs.py'
             ]
 
-        if "hair" not in hair_length:
+        if hair_length and "hair" not in hair_length:
             hair_length = f"{hair_length} hair"
         sample_image_hash = None
         if style_type == "hairstyle":
