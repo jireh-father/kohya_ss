@@ -1239,6 +1239,7 @@ def _update_training_status(request_id: str, status: str, fb_app_name: str, samp
                 ref = db.reference(f'train_status/{request_id}')
 
             old_status_data = ref.get()
+            print(f"old_status_data: {old_status_data}")
             if status is None:
                 status = old_status_data['status']
             
@@ -1275,6 +1276,8 @@ def _update_training_status(request_id: str, status: str, fb_app_name: str, samp
             
             print(f"학습 상태 업데이트 완료 - request_id: {request_id}, status: {status}")
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             print(f"학습 상태 업데이트 실패: {e}")
 
 
