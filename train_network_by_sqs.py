@@ -1240,7 +1240,7 @@ def _update_training_status(request_id: str, status: str, fb_app_name: str, samp
 
             old_status_data = ref.get()
             print(f"old_status_data: {old_status_data}")
-            if status is None:
+            if status is None and old_status_data is not None and 'status' in old_status_data:
                 status = old_status_data['status']
             
             # 상태 데이터 구성
