@@ -358,10 +358,10 @@ class LoRATrainingHandler:
         """
         logger.info(f"캡션 파일 생성 시작: {len(image_files)}개 파일")
 
-        if "hair" not in hair_length:
-            hair_length = f"{hair_length} hair"
-
         if style_type == "hairstyle":
+            if "hair" not in hair_length:
+                hair_length = f"{hair_length} hair"
+
             caption_content = f"{identifier}, {hair_length}"
         else:
             if "hair" not in style_name:
