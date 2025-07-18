@@ -220,6 +220,7 @@ class LoRATrainingHandler:
             logger.info(f"학습 상태 업데이트 완료 - request_id: {request_id}, status: {status}")
             
         except Exception as e:
+            traceback.print_exc()
             logger.error(f"학습 상태 업데이트 실패: {e}")
             # Firebase 상태 업데이트 실패해도 학습은 계속 진행
     
