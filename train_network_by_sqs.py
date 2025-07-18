@@ -170,7 +170,7 @@ class NetworkTrainer:
     def sample_images(self, accelerator, args, epoch, global_step, device, vae, tokenizer, text_encoder, unet):
         train_util.sample_images(accelerator, args, epoch, global_step, device, vae, tokenizer, text_encoder, unet)
 
-    def gen_sample_image(self, ckpt_name, output_dir, sample_seed, sample_image_hash, epoch=None):
+    def gen_sample_image(self, ckpt_name, output_dir, sample_seed, sample_image_hash, epoch=None, train_request_id=None):
         print(f"gen sample image: {ckpt_name}, {output_dir}, {sample_seed}, {sample_image_hash}, {epoch}")
         ckpt_file = os.path.join(output_dir, ckpt_name)
         # UPLOAD MODEL TO s3
@@ -227,7 +227,7 @@ class NetworkTrainer:
         #     ref = db.reference(f'get_status/{request_id}', app=fb_app_hmm)
         # else:
         #     ref = db.reference(f'gen_status/{request_id}')
-        _update_training_status(request_id, None, self.fb_app_name, sample_epoch=epoch, sample_image_url=gen_url)
+        _update_training_status(train_request_id, None, self.fb_app_name, sample_epoch=epoch, sample_image_url=gen_url)
 
         # ref event listener 생성, 이미지 생성 완료되면 학습용 self.up
         # generation_complete = threading.Event()
@@ -1032,7 +1032,7 @@ class NetworkTrainer:
                     if args.sample_image_hash is not None and (epoch + 1) % args.sample_epoch_interval == 0 and (epoch + 1) >= args.sample_start_epoch:
                         accelerator.print(f"gen sample image: {ckpt_name}")
                         print(f"gen sample image: {ckpt_name}")
-                        self.gen_sample_image(ckpt_name, args.output_dir, args.sample_seed, args.sample_image_hash, epoch=epoch+1)
+                        self.gen_sample_image(ckpt_name, args.output_dir, args.sample_seed, args.sample_image_hash, epoch=epoch+1, train_request_id=args.request_id)
 
                     remove_epoch_no = train_util.get_remove_epoch_no(args, epoch + 1)
                     if remove_epoch_no is not None:
