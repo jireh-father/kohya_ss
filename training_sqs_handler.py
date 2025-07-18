@@ -47,7 +47,8 @@ class LoRATrainingHandler:
                  sample_seed: int = 123456, sample_epoch_interval: int = 50,
                  sample_start_epoch: int = 100,
                  sample_female_hairstyle_image_hash: str = None, sample_male_hairstyle_image_hash: str = None,
-                 sample_female_dye_image_hash: str = None, sample_male_dye_image_hash: str = None):
+                 sample_female_dye_image_hash: str = None, sample_male_dye_image_hash: str = None,
+                 num_gpus: int = 4):
         """
         SQS LoRA 학습 핸들러 초기화
         
@@ -86,6 +87,8 @@ class LoRATrainingHandler:
         self.sample_male_dye_image_hash = sample_male_dye_image_hash
         self.default_fb_app = None
         self.fb_app_hmm = None
+        self.num_gpus = num_gpus
+        self.current_gpu_idx = 0
         
     def _get_aws_credentials(self) -> tuple:
         """
@@ -587,7 +590,8 @@ class LoRATrainingHandler:
             log_file = os.path.join(dirs['base_dir'], 'train.log')
             
             # 환경변수 설정
-            env_vars = f'CUDA_VISIBLE_DEVICES=0'
+            env_vars = f'CUDA_VISIBLE_DEVICES={self.current_gpu_idx}'
+            self.current_gpu_idx = (self.current_gpu_idx + 1) % self.num_gpus
             if os.name == 'nt':
                 env_vars += ' PYTHONIOENCODING=utf-8 CHCP=65001'
             
@@ -829,6 +833,12 @@ def main():
         default='7b68ead24f5e06438ded3c8115282f15763c2a42',
         help='샘플링 남성 염색 이미지 해시 (기본값: None)'
     )
+    # num_gpus
+    parser.add_argument(
+        '--num-gpus',
+        default=4,
+        help='사용할 GPU 수 (기본값: 1)'
+    )
     args = parser.parse_args()
     
     # 로그 레벨 설정
@@ -852,7 +862,8 @@ def main():
         args.sample_female_hairstyle_image_hash,
         args.sample_male_hairstyle_image_hash,
         args.sample_female_dye_image_hash,
-        args.sample_male_dye_image_hash
+        args.sample_male_dye_image_hash,
+        args.num_gpus
     )
     
     try:
