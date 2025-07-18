@@ -407,7 +407,7 @@ class LoRATrainingHandler:
             'epoch',
             'network_alpha',
             'network_dim',
-            'hair_length'
+            # 'hair_length'
         ]
         
         # 필수 파라미터 검증
@@ -483,7 +483,7 @@ class LoRATrainingHandler:
             'lr_scheduler': 'cosine',
             'lr_warmup_steps': 46,
             'train_batch_size': 1,
-            'save_every_n_epochs': 50,
+            'save_every_n_epochs': 50 if 'save_every_n_epochs' not in message_data else int(message_data['save_every_n_epochs']),
             'mixed_precision': 'fp16',
             'save_precision': 'fp16',
             'cache_latents': True,
@@ -504,8 +504,8 @@ class LoRATrainingHandler:
             'output_name': request_id,
             'logging_dir': dirs['log_dir'],
             'sample_image_hash': sample_image_hash,
-            'sample_start_epoch': self.sample_start_epoch,
-            'sample_epoch_interval': self.sample_epoch_interval,
+            'sample_start_epoch': self.sample_start_epoch if 'sample_start_epoch' not in message_data else int(message_data['sample_start_epoch']),
+            'sample_epoch_interval': self.sample_epoch_interval if 'sample_epoch_interval' not in message_data else int(message_data['sample_epoch_interval']),
             'sample_seed': self.sample_seed,
             'request_id': request_id,
             'style_name': style_name,
