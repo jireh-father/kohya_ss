@@ -235,7 +235,7 @@ class NetworkTrainer:
         
         def listener(event):
             nonlocal generation_success
-            print(f"gen sample image listener: {event}")
+            print(f"gen sample image listener: {event.data}")
             if event.data:
                 status = event.data.get('status')
                 if status == 'success':
