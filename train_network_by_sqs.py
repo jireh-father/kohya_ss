@@ -1218,7 +1218,7 @@ def setup_parser() -> argparse.ArgumentParser:
     )
     return parser
 
-def _update_training_status(request_id: str, status: str, fb_app_name: str, sample_epoch=None, sample_image_url=None, error_msg: str = None, **kwargs):
+def _update_training_status(request_id: str, status: str=None, fb_app_name: str=None, sample_epoch=None, sample_image_url=None, error_msg: str = None, **kwargs):
         """
         Firebase Realtime Database에 학습 상태 업데이트
         
