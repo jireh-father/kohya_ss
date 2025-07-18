@@ -164,7 +164,9 @@ class LoRATrainingHandler:
                     'databaseURL': FIREBASE_DATABASE_URL
                 })
 
-                self.fb_app_hmm = firebase_admin.initialize_app(cred, {
+                hmm_cred = credentials.Certificate(FIREBASE_SERVICE_ACCOUNT_KEY_HMM)
+
+                self.fb_app_hmm = firebase_admin.initialize_app(hmm_cred, {
                     'databaseURL': FIREBASE_DATABASE_URL_HMM
                 }, name='hairmodelmake')
 
