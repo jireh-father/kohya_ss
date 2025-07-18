@@ -223,52 +223,53 @@ class NetworkTrainer:
         gen_url = f"https://{S3_BUCKET_NAME}.s3.{REGION_NAME}.amazonaws.com/{S3_GEN_IMAGE_DIR}/{request_id}_0.jpg"
 
         #todo: rtdb event listener 생성해서 이미지 생성 완료되면 학습용 rtdb에 reuqest_id에 샘플 이미지 url 등록, timeout 도 필요함.
-        if self.fb_app_name == 'hairmodelmake':
-            ref = db.reference(f'get_status/{request_id}', app=fb_app_hmm)
-        else:
-            ref = db.reference(f'gen_status/{request_id}')
+        # if self.fb_app_name == 'hairmodelmake':
+        #     ref = db.reference(f'get_status/{request_id}', app=fb_app_hmm)
+        # else:
+        #     ref = db.reference(f'gen_status/{request_id}')
+        _update_training_status(request_id, None, self.fb_app_name, sample_epoch=epoch, sample_image_url=gen_url)
 
         # ref event listener 생성, 이미지 생성 완료되면 학습용 self.up
         # generation_complete = threading.Event()
-        generation_success = False
-        timeout_seconds = 300  # 5분
+        # generation_success = False
+        # timeout_seconds = 300  # 5분
         
-        def listener(event):
-            nonlocal generation_success
-            print(f"gen sample image listener: {event.data}")
-            if event.data:
-                status = event.data.get('status')
-                if status == 'success':
-                    generation_success = True
-                    # generation_complete.set()
-                    _update_training_status(request_id, None, self.fb_app_name, sample_epoch=epoch, sample_image_url=gen_url)
-                    ref.delete()
-                elif status == 'error':
-                    generation_success = False
-                    # generation_complete.set()
-                    _update_training_status(request_id, None, self.fb_app_name, sample_epoch=epoch, sample_image_url=None)
-                    ref.delete()
-                # 다른 값일 경우는 대기 상태 유지
+        # def listener(event):
+        #     nonlocal generation_success
+        #     print(f"gen sample image listener: {event.data}")
+        #     if event.data:
+        #         status = event.data.get('status')
+        #         if status == 'success':
+        #             generation_success = True
+        #             # generation_complete.set()
+        #             _update_training_status(request_id, None, self.fb_app_name, sample_epoch=epoch, sample_image_url=gen_url)
+        #             ref.delete()
+        #         elif status == 'error':
+        #             generation_success = False
+        #             # generation_complete.set()
+        #             _update_training_status(request_id, None, self.fb_app_name, sample_epoch=epoch, sample_image_url=None)
+        #             ref.delete()
+        #         # 다른 값일 경우는 대기 상태 유지
         
-        # 이벤트 리스너 연결
-        listener_handle = ref.listen(listener)
+        # # 이벤트 리스너 연결
+        # listener_handle = ref.listen(listener)
         
-        # 타임아웃과 함께 대기
-        # if generation_complete.wait(timeout=timeout_seconds):
-        #     # 이벤트가 발생한 경우
-        #     if generation_success:
-        #         print(f"gen sample image success: {gen_url}")
-        #         _update_training_status(request_id, None, self.fb_app_name, sample_epoch=epoch, sample_image_url=gen_url)
-        #     else:
-        #         print(f"gen sample image failed: {gen_url}")
-        #         _update_training_status(request_id, None, self.fb_app_name, sample_epoch=epoch, sample_image_url=None)
-        # else:
-        #     # 타임아웃 발생
-        #     print(f"gen sample image timeout: {gen_url}")
-        #     _update_training_status(request_id, None, self.fb_app_name, sample_epoch=epoch, sample_image_url=None)
+        # # 타임아웃과 함께 대기
+        # # if generation_complete.wait(timeout=timeout_seconds):
+        # #     # 이벤트가 발생한 경우
+        # #     if generation_success:
+        # #         print(f"gen sample image success: {gen_url}")
+        # #         _update_training_status(request_id, None, self.fb_app_name, sample_epoch=epoch, sample_image_url=gen_url)
+        # #     else:
+        # #         print(f"gen sample image failed: {gen_url}")
+        # #         _update_training_status(request_id, None, self.fb_app_name, sample_epoch=epoch, sample_image_url=None)
+        # # else:
+        # #     # 타임아웃 발생
+        # #     print(f"gen sample image timeout: {gen_url}")
+        # #     _update_training_status(request_id, None, self.fb_app_name, sample_epoch=epoch, sample_image_url=None)
         
-        # 리스너 해제 후 ref 삭제
-        listener_handle.close()
+        # # 리스너 해제 후 ref 삭제
+        # listener_handle.close()
         # ref.delete()
 
 
