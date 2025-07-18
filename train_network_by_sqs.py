@@ -213,16 +213,16 @@ class NetworkTrainer:
         params['image_hash'] = sample_image_hash
         params['lora_download_s3_key'] = s3_key
         if self.fb_app_name == 'hairmodelmake':
-            params['fb_app_name'] = 'hairmodelmake'
+            params['fb_app_name'] = self.fb_app_name
         sqs.send_message(QueueUrl=SQS_URL_COMFYUI, MessageBody=json.dumps(params))
         # save data to rdb, data is training epoch, training request_id, gen url, gen params etc
         gen_url = f"https://{S3_BUCKET_NAME}.s3.{REGION_NAME}.amazonaws.com/{S3_GEN_IMAGE_DIR}/{request_id}_0.jpg"
 
         #todo: rtdb event listener 생성해서 이미지 생성 완료되면 학습용 rtdb에 reuqest_id에 샘플 이미지 url 등록, timeout 도 필요함.
         if self.fb_app_name == 'hairmodelmake':
-            ref = db.reference(f'get_status/{request_id}')
+            ref = db.reference(f'get_status/{request_id}', app=fb_app_hmm)
         else:
-            ref = db.reference(f'gen_status/{request_id}', app=fb_app_hmm)
+            ref = db.reference(f'gen_status/{request_id}')
 
         # ref event listener 생성, 이미지 생성 완료되면 학습용 self.up
         generation_complete = threading.Event()
@@ -1233,9 +1233,9 @@ def _update_training_status(request_id: str, status: str, fb_app_name: str, samp
             
             # Firebase에 상태 업데이트
             if fb_app_name == 'hairmodelmake':
-                ref = db.reference(f'train_status/{request_id}')
-            else:
                 ref = db.reference(f'train_status/{request_id}', app=fb_app_hmm)
+            else:
+                ref = db.reference(f'train_status/{request_id}')
 
             samples_dict = {}
             if sample_epoch is not None:
