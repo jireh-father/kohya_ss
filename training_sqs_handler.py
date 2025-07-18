@@ -211,6 +211,7 @@ class LoRATrainingHandler:
             status_data.update(kwargs)
             
             # Firebase에 상태 업데이트
+            print("fb app name: ", self.fb_app_name, request_id)
             if self.fb_app_name == 'hairmodelmake':
                 ref = db.reference(f'train_status/{request_id}', app=self.fb_app_hmm)
             else:

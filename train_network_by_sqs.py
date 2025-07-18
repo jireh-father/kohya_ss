@@ -234,6 +234,7 @@ class NetworkTrainer:
         
         def listener(event):
             nonlocal generation_success
+            print(f"gen sample image listener: {event}")
             if event.data:
                 status = event.data.get('status')
                 if status == 'success':
@@ -1219,6 +1220,12 @@ def _update_training_status(request_id: str, status: str, fb_app_name: str, samp
             # UTC 타임스탬프 생성
             timestamp = int(time.time())
 
+            # Firebase에 상태 업데이트
+            if fb_app_name == 'hairmodelmake':
+                ref = db.reference(f'train_status/{request_id}', app=fb_app_hmm)
+            else:
+                ref = db.reference(f'train_status/{request_id}')
+
             old_status_data = ref.get()
             if status is None:
                 status = old_status_data['status']
@@ -1237,11 +1244,6 @@ def _update_training_status(request_id: str, status: str, fb_app_name: str, samp
             # 추가 필드들 병합
             status_data.update(kwargs)
             
-            # Firebase에 상태 업데이트
-            if fb_app_name == 'hairmodelmake':
-                ref = db.reference(f'train_status/{request_id}', app=fb_app_hmm)
-            else:
-                ref = db.reference(f'train_status/{request_id}')
 
             samples_dict = {}
             if sample_epoch is not None:
