@@ -467,6 +467,8 @@ class LoRATrainingHandler:
             else:
                 sample_image_hash = self.sample_male_dye_image_hash
 
+        print("message_data: ", message_data)
+
         # 5. 기본 파라미터 설정
         default_params = {
             'enable_bucket': True,
