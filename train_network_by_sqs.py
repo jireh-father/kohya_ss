@@ -171,6 +171,7 @@ class NetworkTrainer:
         train_util.sample_images(accelerator, args, epoch, global_step, device, vae, tokenizer, text_encoder, unet)
 
     def gen_sample_image(self, ckpt_name, output_dir, sample_seed, sample_image_hash, epoch=None):
+        print(f"gen sample image: {ckpt_name}, {output_dir}, {sample_seed}, {sample_image_hash}, {epoch}")
         ckpt_file = os.path.join(output_dir, ckpt_name)
         # UPLOAD MODEL TO s3
         s3_key = f'custom_hairstyle_models/{args.request_id}/{ckpt_name}'
@@ -1018,8 +1019,10 @@ class NetworkTrainer:
                 if is_main_process and saving:
                     ckpt_name = train_util.get_epoch_ckpt_name(args, "." + args.save_model_as, epoch + 1)
                     save_model(ckpt_name, accelerator.unwrap_model(network), global_step, epoch + 1)
+                    accelerator.print(f"save model: {ckpt_name}")
 
                     if args.sample_image_hash is not None and (epoch + 1) % args.sample_epoch_interval == 0 and (epoch + 1) >= args.sample_start_epoch:
+                        accelerator.print(f"gen sample image: {ckpt_name}")
                         self.gen_sample_image(ckpt_name, args.output_dir, args.sample_seed, args.sample_image_hash, epoch=epoch+1)
 
                     remove_epoch_no = train_util.get_remove_epoch_no(args, epoch + 1)
