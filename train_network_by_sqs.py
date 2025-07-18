@@ -1011,18 +1011,22 @@ class NetworkTrainer:
                 logs = {"loss/epoch": loss_total / len(loss_list)}
                 accelerator.log(logs, step=epoch + 1)
 
+
             accelerator.wait_for_everyone()
 
             # 指定エポックごとにモデルを保存
             if args.save_every_n_epochs is not None:
+                print(f"save model: {epoch + 1}")
                 saving = (epoch + 1) % args.save_every_n_epochs == 0 and (epoch + 1) < num_train_epochs
                 if is_main_process and saving:
                     ckpt_name = train_util.get_epoch_ckpt_name(args, "." + args.save_model_as, epoch + 1)
                     save_model(ckpt_name, accelerator.unwrap_model(network), global_step, epoch + 1)
                     accelerator.print(f"save model: {ckpt_name}")
+                    print(f"save model: {ckpt_name}")
 
                     if args.sample_image_hash is not None and (epoch + 1) % args.sample_epoch_interval == 0 and (epoch + 1) >= args.sample_start_epoch:
                         accelerator.print(f"gen sample image: {ckpt_name}")
+                        print(f"gen sample image: {ckpt_name}")
                         self.gen_sample_image(ckpt_name, args.output_dir, args.sample_seed, args.sample_image_hash, epoch=epoch+1)
 
                     remove_epoch_no = train_util.get_remove_epoch_no(args, epoch + 1)
