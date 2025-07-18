@@ -17,6 +17,7 @@ from datetime import datetime
 from accelerate.utils import set_seed
 from diffusers import DDPMScheduler
 from library import model_util
+import threading
 
 import library.train_util as train_util
 from library.train_util import (
@@ -55,6 +56,7 @@ REGION_NAME = os.getenv('REGION_NAME')
 AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 S3_BUCKET_NAME = os.getenv('S3_BUCKET_NAME')
+S3_GEN_IMAGE_DIR = os.getenv('S3_GEN_IMAGE_DIR')
 SQS_URL_COMFYUI = os.getenv('SQS_URL_COMFYUI')
 
 cred = credentials.Certificate(FIREBASE_SERVICE_ACCOUNT_KEY)
@@ -168,7 +170,7 @@ class NetworkTrainer:
     def sample_images(self, accelerator, args, epoch, global_step, device, vae, tokenizer, text_encoder, unet):
         train_util.sample_images(accelerator, args, epoch, global_step, device, vae, tokenizer, text_encoder, unet)
 
-    def gen_sample_image(self, ckpt_name, output_dir, sample_seed, sample_image_hash):
+    def gen_sample_image(self, ckpt_name, output_dir, sample_seed, sample_image_hash, epoch=None):
         ckpt_file = os.path.join(output_dir, ckpt_name)
         # UPLOAD MODEL TO s3
         s3_key = f'custom_hairstyle_models/{args.request_id}/{ckpt_name}'
@@ -204,8 +206,9 @@ class NetworkTrainer:
             params['hair_color'] = self.style_name
         else:
             raise ValueError(f"Invalid style type: {self.style_type}")
+        request_id = str(uuid.uuid4())
         params['use_gen_status'] = True
-        params['request_hash'] = str(uuid.uuid4())
+        params['request_hash'] = request_id
         params['seed'] = sample_seed
         params['image_hash'] = sample_image_hash
         params['lora_download_s3_key'] = s3_key
@@ -213,10 +216,48 @@ class NetworkTrainer:
             params['fb_app_name'] = 'hairmodelmake'
         sqs.send_message(QueueUrl=SQS_URL_COMFYUI, MessageBody=json.dumps(params))
         # save data to rdb, data is training epoch, training request_id, gen url, gen params etc
-        gen_url = f"https://{S3_BUCKET_NAME}.s3.{S3_REGION}.amazonaws.com/{S3_GEN_IMAGE_DIR}/{params['request_hash']}_0.jpg"
+        gen_url = f"https://{S3_BUCKET_NAME}.s3.{REGION_NAME}.amazonaws.com/{S3_GEN_IMAGE_DIR}/{request_id}_0.jpg"
 
         #todo: rtdb event listener 생성해서 이미지 생성 완료되면 학습용 rtdb에 reuqest_id에 샘플 이미지 url 등록, timeout 도 필요함.
+        if self.fb_app_name == 'hairmodelmake':
+            ref = db.reference(f'get_status/{request_id}')
+        else:
+            ref = db.reference(f'gen_status/{request_id}', app=fb_app_hmm)
 
+        # ref event listener 생성, 이미지 생성 완료되면 학습용 self.up
+        generation_complete = threading.Event()
+        generation_success = False
+        timeout_seconds = 300  # 5분
+        
+        def listener(event):
+            nonlocal generation_success
+            if event.data:
+                status = event.data.get('status')
+                if status == 'success':
+                    generation_success = True
+                    generation_complete.set()
+                elif status == 'error':
+                    generation_success = False
+                    generation_complete.set()
+                # 다른 값일 경우는 대기 상태 유지
+        
+        # 이벤트 리스너 연결
+        listener_handle = ref.listen(listener)
+        
+        # 타임아웃과 함께 대기
+        if generation_complete.wait(timeout=timeout_seconds):
+            # 이벤트가 발생한 경우
+            if generation_success:
+                _update_training_status(request_id, None, self.fb_app_name, sample_epoch=epoch, sample_image_url=gen_url)
+            else:
+                _update_training_status(request_id, None, self.fb_app_name, sample_epoch=epoch, sample_image_url=None)
+        else:
+            # 타임아웃 발생
+            _update_training_status(request_id, None, self.fb_app_name, sample_epoch=epoch, sample_image_url=None)
+        
+        # 리스너 해제 후 ref 삭제
+        listener_handle.close()
+        ref.delete()
 
 
     def train(self, args):
@@ -972,7 +1013,7 @@ class NetworkTrainer:
                     save_model(ckpt_name, accelerator.unwrap_model(network), global_step, epoch + 1)
 
                     if args.sample_image_hash is not None and (epoch + 1) % args.sample_epoch_interval == 0 and (epoch + 1) >= args.sample_start_epoch:
-                        self.gen_sample_image(ckpt_name, args.output_dir, args.sample_seed, args.sample_image_hash)
+                        self.gen_sample_image(ckpt_name, args.output_dir, args.sample_seed, args.sample_image_hash, epoch=epoch+1)
 
                     remove_epoch_no = train_util.get_remove_epoch_no(args, epoch + 1)
                     if remove_epoch_no is not None:
@@ -1171,6 +1212,10 @@ def _update_training_status(request_id: str, status: str, fb_app_name: str, samp
         try:
             # UTC 타임스탬프 생성
             timestamp = int(time.time())
+
+            old_status_data = ref.get()
+            if status is None:
+                status = old_status_data['status']
             
             # 상태 데이터 구성
             status_data = {
@@ -1193,10 +1238,13 @@ def _update_training_status(request_id: str, status: str, fb_app_name: str, samp
                 ref = db.reference(f'train_status/{request_id}', app=fb_app_hmm)
 
             samples_dict = {}
-            if sample_epoch is not None and sample_image_url is not None:
-                samples_dict[str(sample_epoch)] = sample_image_url
+            if sample_epoch is not None:
+                if sample_image_url is not None:
+                    samples_dict[str(sample_epoch)] = sample_image_url
+                else:
+                    samples_dict[str(sample_epoch)] = None
 
-            old_status_data = ref.get()
+            
             if old_status_data is not None and 'samples' in old_status_data:
                 samples_dict.update(old_status_data['samples'])
 
