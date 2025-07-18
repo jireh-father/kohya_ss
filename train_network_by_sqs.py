@@ -210,7 +210,7 @@ class NetworkTrainer:
         else:
             raise ValueError(f"Invalid style type: {self.style_type}")
         request_id = str(uuid.uuid4())
-        params['use_gen_status'] = False#True
+        params['use_gen_status'] = True
         params['request_hash'] = request_id
         params['seed'] = sample_seed
         params['image_hash'] = sample_image_hash
