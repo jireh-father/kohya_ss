@@ -1271,6 +1271,8 @@ def _update_training_status(request_id: str, status: str=None, fb_app_name: str=
 
             
             if old_status_data is not None and 'samples' in old_status_data:
+                print("samples_dict", samples_dict)
+                print("old_status_data['samples']", old_status_data['samples'])
                 samples_dict.update(old_status_data['samples'])
 
             if samples_dict:
