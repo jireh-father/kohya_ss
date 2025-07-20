@@ -1,0 +1,30 @@
+accelerate
+albumentations
+altair
+dadaptation
+diffusers[torch]
+easygui
+einops
+fairscale
+ftfy
+gradio
+huggingface-hub
+lion-pytorch
+lycoris_lora
+# for loading Diffusers' SDXL
+invisible-watermark
+# open clip for SDXL
+open-clip-torch
+opencv-python
+prodigyopt
+pytorch-lightning
+rich
+safetensors
+timm
+tk
+toml
+transformers
+voluptuous
+wandb
+# for kohya_ss library
+-e . # no_verify leave this to specify not checking this a verification stage
