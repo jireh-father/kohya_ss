@@ -1,7 +1,7 @@
-boto3==1.39.4
-botocore==1.39.4
-aiohttp==3.12.14
-aioboto3==15.0.0
-aiobotocore==2.23.0
-python-dotenv==1.1.1
+boto3
+botocore
+aiohttp
+aioboto3
+aiobotocore
+python-dotenv
 firebase-admin==4.5.3
