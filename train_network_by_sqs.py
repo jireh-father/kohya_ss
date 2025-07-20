@@ -209,19 +209,21 @@ class NetworkTrainer:
             params['hair_color'] = self.style_name
         else:
             raise ValueError(f"Invalid style type: {self.style_type}")
-        request_id = str(uuid.uuid4())
+        
         params['use_gen_status'] = False#True
-        params['request_hash'] = request_id
+        
         params['seed'] = sample_seed
         params['lora_download_s3_key'] = s3_key
         if self.fb_app_name == 'hairmodelmake':
             params['fb_app_name'] = self.fb_app_name
         gen_urls = []
         for sample_image_hash in sample_image_hashs.split(':::'):
+            request_id = str(uuid.uuid4())
+            params['request_hash'] = request_id
             params['image_hash'] = sample_image_hash
             print(f"gen sample image params: {params}")
             sqs.send_message(QueueUrl=SQS_URL_COMFYUI, MessageBody=json.dumps(params))
-            gen_urls.append(f"https://{S3_BUCKET_NAME}.s3.{REGION_NAME}.amazonaws.com/{S3_GEN_IMAGE_DIR}/{request_id}_{i}.jpg")
+            gen_urls.append(f"https://{S3_BUCKET_NAME}.s3.{REGION_NAME}.amazonaws.com/{S3_GEN_IMAGE_DIR}/{request_id}_0.jpg")
         # save data to rdb, data is training epoch, training request_id, gen url, gen params etc
 
         #todo: rtdb event listener 생성해서 이미지 생성 완료되면 학습용 rtdb에 reuqest_id에 샘플 이미지 url 등록, timeout 도 필요함.
