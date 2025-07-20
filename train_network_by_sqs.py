@@ -170,8 +170,8 @@ class NetworkTrainer:
     def sample_images(self, accelerator, args, epoch, global_step, device, vae, tokenizer, text_encoder, unet):
         train_util.sample_images(accelerator, args, epoch, global_step, device, vae, tokenizer, text_encoder, unet)
 
-    def gen_sample_image(self, ckpt_name, output_dir, sample_seed, sample_image_hash, epoch=None, train_request_id=None):
-        print(f"gen sample image: {ckpt_name}, {output_dir}, {sample_seed}, {sample_image_hash}, {epoch}")
+    def gen_sample_image(self, ckpt_name, output_dir, sample_seed, sample_image_hashs, epoch=None, train_request_id=None):
+        print(f"gen sample image: {ckpt_name}, {output_dir}, {sample_seed}, {sample_image_hashs}, {epoch}")
         ckpt_file = os.path.join(output_dir, ckpt_name)
         # UPLOAD MODEL TO s3
         s3_key = f'custom_hairstyle_models/{args.request_id}/{ckpt_name}'
@@ -213,21 +213,23 @@ class NetworkTrainer:
         params['use_gen_status'] = False#True
         params['request_hash'] = request_id
         params['seed'] = sample_seed
-        params['image_hash'] = sample_image_hash
         params['lora_download_s3_key'] = s3_key
         if self.fb_app_name == 'hairmodelmake':
             params['fb_app_name'] = self.fb_app_name
-        print(f"gen sample image params: {params}")
-        sqs.send_message(QueueUrl=SQS_URL_COMFYUI, MessageBody=json.dumps(params))
+        gen_urls = []
+        for sample_image_hash in sample_image_hashs.split(':::'):
+            params['image_hash'] = sample_image_hash
+            print(f"gen sample image params: {params}")
+            sqs.send_message(QueueUrl=SQS_URL_COMFYUI, MessageBody=json.dumps(params))
+            gen_urls.append(f"https://{S3_BUCKET_NAME}.s3.{REGION_NAME}.amazonaws.com/{S3_GEN_IMAGE_DIR}/{request_id}_{i}.jpg")
         # save data to rdb, data is training epoch, training request_id, gen url, gen params etc
-        gen_url = f"https://{S3_BUCKET_NAME}.s3.{REGION_NAME}.amazonaws.com/{S3_GEN_IMAGE_DIR}/{request_id}_0.jpg"
 
         #todo: rtdb event listener 생성해서 이미지 생성 완료되면 학습용 rtdb에 reuqest_id에 샘플 이미지 url 등록, timeout 도 필요함.
         # if self.fb_app_name == 'hairmodelmake':
         #     ref = db.reference(f'get_status/{request_id}', app=fb_app_hmm)
         # else:
         #     ref = db.reference(f'gen_status/{request_id}')
-        _update_training_status(train_request_id, None, self.fb_app_name, sample_epoch=epoch, sample_image_url=gen_url)
+        _update_training_status(train_request_id, None, self.fb_app_name, sample_epoch=epoch, sample_image_urls=gen_urls)
 
         # ref event listener 생성, 이미지 생성 완료되면 학습용 self.up
         # generation_complete = threading.Event()
@@ -1029,10 +1031,10 @@ class NetworkTrainer:
                     accelerator.print(f"save model: {ckpt_name}")
                     print(f"save model: {ckpt_name}")
 
-                    if args.sample_image_hash is not None and (epoch + 1) % args.sample_epoch_interval == 0 and (epoch + 1) >= args.sample_start_epoch:
+                    if args.sample_image_hashs is not None and (epoch + 1) % args.sample_epoch_interval == 0 and (epoch + 1) >= args.sample_start_epoch:
                         accelerator.print(f"gen sample image: {ckpt_name}")
                         print(f"gen sample image: {ckpt_name}")
-                        self.gen_sample_image(ckpt_name, args.output_dir, args.sample_seed, args.sample_image_hash, epoch=epoch+1, train_request_id=args.request_id)
+                        self.gen_sample_image(ckpt_name, args.output_dir, args.sample_seed, args.sample_image_hashs, epoch=epoch+1, train_request_id=args.request_id)
 
                     remove_epoch_no = train_util.get_remove_epoch_no(args, epoch + 1)
                     if remove_epoch_no is not None:
@@ -1188,9 +1190,9 @@ def setup_parser() -> argparse.ArgumentParser:
         default=123456,
         help="sample seed / 샘플링 시드",
     )
-    # sample_image_hash
+    # sample_image_hashs
     parser.add_argument(
-        "--sample_image_hash",
+        "--sample_image_hashs",
         type=str,
         default=None,
         help="sample image hash / 샘플링 이미지 해시",
@@ -1218,7 +1220,7 @@ def setup_parser() -> argparse.ArgumentParser:
     )
     return parser
 
-def _update_training_status(request_id: str, status: str=None, fb_app_name: str=None, sample_epoch=None, sample_image_url=None, error_msg: str = None, **kwargs):
+def _update_training_status(request_id: str, status: str=None, fb_app_name: str=None, sample_epoch=None, sample_image_urls=None, error_msg: str = None, **kwargs):
         """
         Firebase Realtime Database에 학습 상태 업데이트
         
@@ -1260,8 +1262,8 @@ def _update_training_status(request_id: str, status: str=None, fb_app_name: str=
 
             samples_dict = {}
             if sample_epoch is not None:
-                if sample_image_url is not None:
-                    samples_dict[str(sample_epoch)] = sample_image_url
+                if sample_image_urls is not None:
+                    samples_dict[str(sample_epoch)] = sample_image_urls
                 else:
                     samples_dict[str(sample_epoch)] = None
 

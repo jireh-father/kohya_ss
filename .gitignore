@@ -10,7 +10,7 @@ wd14_tagger_model
 
 # CUDNN for Windows
 cudnn_windows
-
+*firebase*.json
 # Cache and temporary files
 .cache
 .DS_Store

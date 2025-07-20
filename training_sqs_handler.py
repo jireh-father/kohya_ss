@@ -445,6 +445,7 @@ class LoRATrainingHandler:
                 f'{self.virtual_env_bin_path}/accelerate', 'launch',
                 '--num_processes=1',
                 '--num_cpu_threads_per_process=2',
+                # '--mixed_precision=fp16',
                 './train_network_by_sqs.py'
             ]
         else:
@@ -458,17 +459,20 @@ class LoRATrainingHandler:
 
         if hair_length and "hair" not in hair_length:
             hair_length = f"{hair_length} hair"
-        sample_image_hash = None
-        if style_type == "hairstyle":
-            if gender == "female":
-                sample_image_hash = self.sample_female_hairstyle_image_hash
-            else:
-                sample_image_hash = self.sample_male_hairstyle_image_hash
+        sample_image_hashs = None
+        if 'sample_image_hashs' in message_data and message_data['sample_image_hashs'] is not None:
+            sample_image_hashs = ":::".join(message_data['sample_image_hashs'])
         else:
-            if gender == "female":
-                sample_image_hash = self.sample_female_dye_image_hash
+            if style_type == "hairstyle":
+                if gender == "female":
+                    sample_image_hashs = self.sample_female_hairstyle_image_hash
+                else:
+                    sample_image_hashs = self.sample_male_hairstyle_image_hash
             else:
-                sample_image_hash = self.sample_male_dye_image_hash
+                if gender == "female":
+                    sample_image_hashs = self.sample_female_dye_image_hash
+                else:
+                    sample_image_hashs = self.sample_male_dye_image_hash
 
         print("message_data: ", message_data)
 
@@ -508,7 +512,7 @@ class LoRATrainingHandler:
             'output_dir': dirs['model_dir'],
             'output_name': request_id,
             'logging_dir': dirs['log_dir'],
-            'sample_image_hash': sample_image_hash,
+            'sample_image_hashs': sample_image_hashs,
             'sample_start_epoch': self.sample_start_epoch if 'sample_start_epoch' not in message_data else int(message_data['sample_start_epoch']),
             'sample_epoch_interval': self.sample_epoch_interval if 'sample_epoch_interval' not in message_data else int(message_data['sample_epoch_interval']),
             'sample_seed': self.sample_seed,
@@ -534,30 +538,30 @@ class LoRATrainingHandler:
         params = {**default_params, **override_params}
         
         # 7. 명령어에 파라미터 추가
-        if self.virtual_env_bin_path and os.name == 'nt':
-            # Windows에서 conda 환경 사용 시 - 명령어 문자열에 파라미터 추가
-            cmd_parts = []
-            for key, value in params.items():
-                if isinstance(value, bool) and value == True:
-                    cmd_parts.append(f'--{key}')
-                else:
-                    # 경로를 정규화하여 슬래시 사용
-                    if 'dir' in key.lower() and isinstance(value, str):
-                        value = value.replace('\\', '/')
-                    cmd_parts.extend([f'--{key}', f'"{str(value)}"'])
+        # if self.virtual_env_bin_path and os.name == 'nt':
+        #     # Windows에서 conda 환경 사용 시 - 명령어 문자열에 파라미터 추가
+        #     cmd_parts = []
+        #     for key, value in params.items():
+        #         if isinstance(value, bool) and value == True:
+        #             cmd_parts.append(f'--{key}')
+        #         else:
+        #             # 경로를 정규화하여 슬래시 사용
+        #             if 'dir' in key.lower() and isinstance(value, str):
+        #                 value = value.replace('\\', '/')
+        #             cmd_parts.extend([f'--{key}', f'"{str(value)}"'])
             
-            # 기존 명령어에 파라미터 추가
-            cmd[2] = cmd[2] + ' ' + ' '.join(cmd_parts)
-        else:
-            # 일반적인 경우
-            for key, value in params.items():
-                if isinstance(value, bool) and value == True:
-                    cmd.append(f'--{key}')
-                else:
-                    # 경로를 정규화하여 슬래시 사용
-                    if 'dir' in key.lower() and isinstance(value, str):
-                        value = value.replace('\\', '/')
-                    cmd.extend([f'--{key}', f'"{str(value)}"'])
+        #     # 기존 명령어에 파라미터 추가
+        #     # cmd[2] = cmd[2] + ' ' + ' '.join(cmd_parts)
+        # else:
+        # 일반적인 경우
+        for key, value in params.items():
+            if isinstance(value, bool) and value == True:
+                cmd.append(f'--{key}')
+            else:
+                # 경로를 정규화하여 슬래시 사용
+                if 'dir' in key.lower() and isinstance(value, str):
+                    value = value.replace('\\', '/')
+                cmd.extend([f'--{key}', f'"{str(value)}"'])
         
         logger.info(f"학습 데이터 준비 완료 - 이미지: {len(image_files)}개, 출력: {dirs['model_dir']}")
         return cmd, dirs
@@ -609,11 +613,20 @@ class LoRATrainingHandler:
             
             # 백그라운드로 실행 (기다리지 않음)
             import subprocess
-            subprocess.run(full_cmd, shell=True, cwd=os.getcwd())
+            if os.name == 'nt':
+                print("windows 실행")
+                env = os.environ.copy()
+                env['PYTHONIOENCODING'] = 'utf-8'
+                env['CHCP'] = '65001'
+                subprocess.run("chcp 65001", shell=True)
+                subprocess.run(full_cmd, shell=True, cwd=os.getcwd(), encoding='utf-8', text=True, universal_newlines=True, env=env)
+            else:
+                subprocess.run(full_cmd, shell=True, cwd=os.getcwd())
             
             logger.info(f"학습이 백그라운드에서 시작되었습니다: {output_name}, 로그: {log_file}")
                 
         except Exception as e:
+            traceback.print_exc()
             logger.error(f"학습 실행 중 오류 발생: {e}")
             
             # 예외 발생 시 FAILED 상태로 업데이트
@@ -812,31 +825,32 @@ def main():
     # sample_female_hairstyle_image_hash
     parser.add_argument(
         '--sample-female-hairstyle-image-hash',
-        default='08a2dbdec3f1caaf3c2b685262abf2a34d293279',
+        default='08a2dbdec3f1caaf3c2b685262abf2a34d293279:::30965cab8baa379f2aefb2ea25accbd677015f77:::d1105ba0cd96598a4b9ed36b4609f0609552049c:::193c7c496e3ca62a2dafffd43644325472ae7399',
         help='샘플링 여성 머리스타일 이미지 해시 (기본값: None)'
     )
     # sample_male_hairstyle_image_hash
     parser.add_argument(
         '--sample-male-hairstyle-image-hash',
-        default='0b1b42ce4ce71b8bf748d070543d1a64ba6d8e9d',
+        default='0b1b42ce4ce71b8bf748d070543d1a64ba6d8e9d:::8ac7924faaff6d3dcc5e4b8a554750a6b4410174:::f6f0cd1cd67c7eb1001aaf59ee2ef53f9a5ceff9',
         help='샘플링 남성 머리스타일 이미지 해시 (기본값: None)'
     )
     # sample_female_dye_image_hash
     parser.add_argument(
         '--sample-female-dye-image-hash',
-        default='71c5bc1e8840e6360f70399e610d01d9aa8d0d6c',
+        default='71c5bc1e8840e6360f70399e610d01d9aa8d0d6c:::67c7b066583412fc1c607fc7fab8962009437b45:::c95b94131abda21cf9d3288665be5e45fc185323:::f999140e36038710706aea85f4bf41e6eaf9a83b',
         help='샘플링 여성 염색 이미지 해시 (기본값: None)'
     )
     # sample_male_dye_image_hash
     parser.add_argument(
         '--sample-male-dye-image-hash',
-        default='7b68ead24f5e06438ded3c8115282f15763c2a42',
+        default='7b68ead24f5e06438ded3c8115282f15763c2a42:::7357d1ed898cdc14a111e088f834770ff159d088:::e96239a1b3e3d568053a21abc9c378e06dc94f51:::1e891b79dbb20b08932c074616d4c67080fe4a92',
         help='샘플링 남성 염색 이미지 해시 (기본값: None)'
     )
     # num_gpus
     parser.add_argument(
         '--num-gpus',
         default=4,
+        type=int,
         help='사용할 GPU 수 (기본값: 1)'
     )
     args = parser.parse_args()
