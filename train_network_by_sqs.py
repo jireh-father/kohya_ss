@@ -203,7 +203,7 @@ class NetworkTrainer:
 
             params['gender'] = self.gender
 
-        elif self.style_type == "dye":
+        elif self.style_type in ["dye", "bleach"]:
             params['generator_type'] = "dye_inpaint"
             
             params['hair_color'] = self.style_name
