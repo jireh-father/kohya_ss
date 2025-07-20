@@ -1,7 +1,3 @@
 boto3
-botocore
-aiohttp
-aioboto3
-aiobotocore
 python-dotenv
 firebase-admin==4.5.3
