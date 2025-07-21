@@ -171,8 +171,8 @@ class NetworkTrainer:
     def sample_images(self, accelerator, args, epoch, global_step, device, vae, tokenizer, text_encoder, unet):
         train_util.sample_images(accelerator, args, epoch, global_step, device, vae, tokenizer, text_encoder, unet)
 
-    def gen_sample_image(self, ckpt_name, output_dir, sample_seed, sample_image_hashs, epoch=None, train_request_id=None):
-        print(f"gen sample image: {ckpt_name}, {output_dir}, {sample_seed}, {sample_image_hashs}, {epoch}")
+    def gen_sample_image(self, ckpt_name, output_dir, sample_seeds, sample_image_hashs, epoch=None, train_request_id=None):
+        print(f"gen sample image: {ckpt_name}, {output_dir}, {sample_seeds}, {sample_image_hashs}, {epoch}")
         ckpt_file = os.path.join(output_dir, ckpt_name)
         # UPLOAD MODEL TO s3
         s3_key = f'custom_hairstyle_models/{self.script_args.request_id}/{ckpt_name}'
@@ -213,7 +213,7 @@ class NetworkTrainer:
         
         params['use_gen_status'] = False#True
         
-        params['seed'] = sample_seed
+        sample_seeds = sample_seeds.split(',')
         params['lora_download_s3_key'] = s3_key
 
         if self.script_args.inference_prompt is not None:
@@ -223,12 +223,14 @@ class NetworkTrainer:
             params['fb_app_name'] = self.fb_app_name
         gen_urls = []
         for sample_image_hash in sample_image_hashs.split(':::'):
-            request_id = str(uuid.uuid4())
-            params['request_hash'] = request_id
-            params['image_hash'] = sample_image_hash
-            print(f"gen sample image params: {params}")
-            sqs.send_message(QueueUrl=SQS_URL_COMFYUI, MessageBody=json.dumps(params))
-            gen_urls.append(f"https://{S3_BUCKET_NAME}.s3.{REGION_NAME}.amazonaws.com/{S3_GEN_IMAGE_DIR}/{request_id}_0.jpg")
+            for sample_seed in sample_seeds:
+                request_id = str(uuid.uuid4())
+                params['seed'] = sample_seed
+                params['request_hash'] = request_id
+                params['image_hash'] = sample_image_hash
+                print(f"gen sample image params: {params}")
+                sqs.send_message(QueueUrl=SQS_URL_COMFYUI, MessageBody=json.dumps(params))
+                gen_urls.append(f"https://{S3_BUCKET_NAME}.s3.{REGION_NAME}.amazonaws.com/{S3_GEN_IMAGE_DIR}/{request_id}_0.jpg")
         # save data to rdb, data is training epoch, training request_id, gen url, gen params etc
 
         #todo: rtdb event listener 생성해서 이미지 생성 완료되면 학습용 rtdb에 reuqest_id에 샘플 이미지 url 등록, timeout 도 필요함.
@@ -1041,7 +1043,7 @@ class NetworkTrainer:
                     if args.sample_image_hashs is not None and (epoch + 1) % args.sample_epoch_interval == 0 and (epoch + 1) >= args.sample_start_epoch:
                         accelerator.print(f"gen sample image: {ckpt_name}")
                         print(f"gen sample image: {ckpt_name}")
-                        self.gen_sample_image(ckpt_name, args.output_dir, args.sample_seed, args.sample_image_hashs, epoch=epoch+1, train_request_id=args.request_id)
+                        self.gen_sample_image(ckpt_name, args.output_dir, args.sample_seeds, args.sample_image_hashs, epoch=epoch+1, train_request_id=args.request_id)
 
                     remove_epoch_no = train_util.get_remove_epoch_no(args, epoch + 1)
                     if remove_epoch_no is not None:
@@ -1190,11 +1192,11 @@ def setup_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="do not use fp16/bf16 VAE in mixed precision (use float VAE) / mixed precisionでも fp16/bf16 VAEを使わずfloat VAEを使う",
     )
-    # sample_seed
+    # sample_seeds
     parser.add_argument(
-        "--sample_seed",
-        type=int,
-        default=123456,
+        "--sample_seeds",
+        type=str,
+        default="123456,84,34232",
         help="sample seed / 샘플링 시드",
     )
     # sample_image_hashs

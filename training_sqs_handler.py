@@ -45,7 +45,7 @@ class LoRATrainingHandler:
                  tmp_dir: str = './work_dir', sqs_max_messages: int = 10, 
                  sqs_visibility_timeout: int = 3, sqs_wait_time: int = 20,
                  s3_bucket_name: str = None, s3_region: str = None, virtual_env_bin_path: str = None,
-                 sample_seed: int = 123456, sample_epoch_interval: int = 50,
+                 sample_seeds: str = "123456", sample_epoch_interval: int = 50,
                  sample_start_epoch: int = 100,
                  sample_female_hairstyle_image_hash: str = None, sample_male_hairstyle_image_hash: str = None,
                  sample_female_dye_image_hash: str = None, sample_male_dye_image_hash: str = None,
@@ -80,7 +80,7 @@ class LoRATrainingHandler:
         self.s3_region = s3_region or region_name
         self.virtual_env_bin_path = virtual_env_bin_path
         self.firebase_initialized = False
-        self.sample_seed = sample_seed
+        self.sample_seeds = sample_seeds
         self.sample_epoch_interval = sample_epoch_interval
         self.sample_start_epoch = sample_start_epoch
         self.sample_female_hairstyle_image_hash = sample_female_hairstyle_image_hash
@@ -525,7 +525,7 @@ class LoRATrainingHandler:
             'sample_image_hashs': sample_image_hashs,
             'sample_start_epoch': self.sample_start_epoch if 'sample_start_epoch' not in message_data else int(message_data['sample_start_epoch']),
             'sample_epoch_interval': self.sample_epoch_interval if 'sample_epoch_interval' not in message_data else int(message_data['sample_epoch_interval']),
-            'sample_seed': self.sample_seed,
+            'sample_seeds': self.sample_seeds,
             'request_id': request_id,
             'style_name': style_name,
             'style_type': style_type,
@@ -823,10 +823,11 @@ def main():
         default='/home/ilseo/source/kohya_ss/venv/bin',
         help='사용할 conda 환경명 (지정하지 않으면 현재 환경 사용)'
     )
-    # sample_seed
+    # sample_seeds
     parser.add_argument(
-        '--sample-seed',
-        default=123456,
+        '--sample-seeds',
+        default="123456,84,34232",
+        type=str,
         help='샘플링 시드 (기본값: 123456)'
     )
     parser.add_argument(
@@ -889,7 +890,7 @@ def main():
         args.s3_bucket_name,
         args.s3_region,
         args.virtual_env_bin_path,
-        args.sample_seed,
+        args.sample_seeds,
         args.sample_epoch_interval,
         args.sample_start_epoch,
         args.sample_female_hairstyle_image_hash,
