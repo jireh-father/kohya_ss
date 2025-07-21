@@ -85,7 +85,7 @@ sqs = boto3.client(
 )
 
 class NetworkTrainer:
-    def __init__(self, style_name=None, style_type=None, hair_length=None, bangs=None, gender=None, fb_app_name=None):
+    def __init__(self, style_name=None, style_type=None, hair_length=None, bangs=None, gender=None, fb_app_name=None, script_args=None):
         self.vae_scale_factor = 0.18215
         self.is_sdxl = False
         self.style_name = style_name
@@ -94,6 +94,7 @@ class NetworkTrainer:
         self.bangs = bangs
         self.gender = gender
         self.fb_app_name = fb_app_name
+        self.script_args = script_args
 
     # TODO 他のスクリプトと共通化する
     def generate_step_logs(
@@ -174,7 +175,7 @@ class NetworkTrainer:
         print(f"gen sample image: {ckpt_name}, {output_dir}, {sample_seed}, {sample_image_hashs}, {epoch}")
         ckpt_file = os.path.join(output_dir, ckpt_name)
         # UPLOAD MODEL TO s3
-        s3_key = f'custom_hairstyle_models/{args.request_id}/{ckpt_name}'
+        s3_key = f'custom_hairstyle_models/{self.script_args.request_id}/{ckpt_name}'
         
         try:
             s3.upload_file(
@@ -214,6 +215,10 @@ class NetworkTrainer:
         
         params['seed'] = sample_seed
         params['lora_download_s3_key'] = s3_key
+
+        if self.script_args.inference_prompt is not None:
+            params['inference_prompt'] = self.script_args.inference_prompt
+        
         if self.fb_app_name == 'hairmodelmake':
             params['fb_app_name'] = self.fb_app_name
         gen_urls = []
@@ -1220,6 +1225,13 @@ def setup_parser() -> argparse.ArgumentParser:
         default=None,#"hairmodelmake",
         help="fb app name / fb 앱 이름",
     )
+    # inference_prompt
+    parser.add_argument(
+        "--inference_prompt",
+        type=str,
+        default=None,
+        help="inference prompt / 추론 프롬프트",
+    )
     return parser
 
 def _update_training_status(request_id: str, status: str=None, fb_app_name: str=None, sample_epoch=None, sample_image_urls=None, error_msg: str = None, **kwargs):
@@ -1297,7 +1309,7 @@ if __name__ == "__main__":
     
 
 
-    trainer = NetworkTrainer(style_name=args.style_name, style_type=args.style_type, hair_length=args.hair_length, bangs=args.bangs, gender=args.gender, fb_app_name=args.fb_app_name)
+    trainer = NetworkTrainer(style_name=args.style_name, style_type=args.style_type, hair_length=args.hair_length, bangs=args.bangs, gender=args.gender, fb_app_name=args.fb_app_name, script_args=args)
     try:
         trainer.train(args)
         print("training finished")

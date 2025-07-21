@@ -40,7 +40,8 @@ logger = logging.getLogger(__name__)
 
 
 class LoRATrainingHandler:
-    def __init__(self, queue_url: str, region_name: str = 'ap-northeast-2', identifier: str = 'shs', 
+    def __init__(self, queue_url: str, region_name: str = 'ap-northeast-2', hairstyle_identifier: str = 'shs', 
+                 dye_identifier: str = 'sts',
                  tmp_dir: str = './work_dir', sqs_max_messages: int = 10, 
                  sqs_visibility_timeout: int = 3, sqs_wait_time: int = 20,
                  s3_bucket_name: str = None, s3_region: str = None, virtual_env_bin_path: str = None,
@@ -55,7 +56,7 @@ class LoRATrainingHandler:
         Args:
             queue_url: SQS 큐 URL
             region_name: AWS 리전
-            identifier: 식별자
+            hairstyle_identifier: 식별자
             tmp_dir: 작업 디렉토리 (기본값: './work_dir')
             sqs_max_messages: SQS 최대 메시지 수 (기본값: 10)
             sqs_visibility_timeout: SQS 가시성 타임아웃 (기본값: 3)
@@ -69,7 +70,8 @@ class LoRATrainingHandler:
         self.sqs = None
         self.s3 = None
         self.fb_app_name = None
-        self.identifier = identifier
+        self.hairstyle_identifier = hairstyle_identifier
+        self.dye_identifier = dye_identifier
         self.tmp_dir = tmp_dir
         self.sqs_max_messages = sqs_max_messages
         self.sqs_visibility_timeout = sqs_visibility_timeout
@@ -256,7 +258,7 @@ class LoRATrainingHandler:
             logger.error(f"학습 상태 조회 실패: {e}")
             return {}
     
-    def _create_directory_structure(self, request_id: str) -> Dict[str, str]:
+    def _create_directory_structure(self, request_id: str, gender: str, style_type: str) -> Dict[str, str]:
         """
         학습용 디렉토리 구조 생성
         
@@ -267,7 +269,11 @@ class LoRATrainingHandler:
             생성된 디렉토리 경로들 딕셔너리
         """
         base_dir = os.path.join(self.tmp_dir, request_id)
-        img_dir = os.path.join(base_dir, 'img', f'1_{self.identifier} woman')
+        identifier = self.hairstyle_identifier if style_type == 'hairstyle' else self.dye_identifier
+        if gender == 'female':
+            img_dir = os.path.join(base_dir, 'img', f'1_{identifier} woman')
+        else:
+            img_dir = os.path.join(base_dir, 'img', f'1_{identifier} man')
         log_dir = os.path.join(base_dir, 'log')
         model_dir = os.path.join(base_dir, 'model')
         
@@ -353,27 +359,30 @@ class LoRATrainingHandler:
             logger.error(f"S3 이미지 다운로드 중 오류: {e}")
             raise
     
-    def _create_caption_files(self, img_dir: str, image_files: list, identifier: str, style_type: str, hair_length: str, style_name: str):
+    def _create_caption_files(self, img_dir: str, image_files: list, hairstyle_identifier: str, style_type: str, hair_length: str, style_name: str, training_prompt: str=None):
         """
         이미지 파일과 동일한 이름의 캡션 txt 파일들을 생성
         
         Args:
             img_dir: 이미지 디렉토리 경로
             image_files: 이미지 파일 목록
-            identifier: 식별자
+            hairstyle_identifier: 식별자
             hair_length: 머리 길이
         """
         logger.info(f"캡션 파일 생성 시작: {len(image_files)}개 파일")
 
-        if style_type == "hairstyle":
-            if "hair" not in hair_length:
-                hair_length = f"{hair_length} hair"
-
-            caption_content = f"{identifier}, {hair_length}"
+        if training_prompt is not None:
+            caption_content = training_prompt
         else:
-            if "hair" not in style_name:
-                style_name = f"{style_name} hair"
-            caption_content = f"{identifier}, {style_name}"
+            if style_type == "hairstyle":
+                if "hair" not in hair_length:
+                    hair_length = f"{hair_length} hair"
+
+                caption_content = f"{hairstyle_identifier}, {hair_length}"
+            else:
+                if "hair" not in style_name:
+                    style_name = f"{style_name} hair"
+                caption_content = f"{hairstyle_identifier}, {style_name}"
         
         for image_file in image_files:
             # 이미지 파일명에서 확장자 제거
@@ -427,7 +436,7 @@ class LoRATrainingHandler:
         gender = message_data['gender']
         
         # 1. 디렉토리 구조 생성
-        dirs = self._create_directory_structure(request_id)
+        dirs = self._create_directory_structure(request_id, gender, style_type)
         
         # 2. S3에서 이미지 다운로드
         image_files = self._download_s3_images(s3_folder_path, dirs['img_dir'])
@@ -436,7 +445,8 @@ class LoRATrainingHandler:
             raise ValueError(f"다운로드된 이미지가 없습니다: {s3_folder_path}")
         
         # 3. 캡션 파일 생성
-        self._create_caption_files(dirs['img_dir'], image_files, self.identifier, style_type, hair_length, style_name)
+        training_prompt = message_data['training_prompt'] if 'training_prompt' in message_data and message_data['training_prompt'] is not None else None
+        self._create_caption_files(dirs['img_dir'], image_files, self.hairstyle_identifier, style_type, hair_length, style_name, training_prompt)
         
         # 4. 기본 명령어 구성
         if self.virtual_env_bin_path:
@@ -504,7 +514,7 @@ class LoRATrainingHandler:
             'noise_offset': 0.0,
             # 'sample_every_n_epochs': 50,
             # 'sample_every_n_epochs': 1,
-            # 'sample_prompts': f'{self.identifier}, {hair_length}',
+            # 'sample_prompts': f'{self.hairstyle_identifier}, {hair_length}',
             # 'sample_sampler': 'k_dpm_2',
             # 고정 파라미터
             'pretrained_model_name_or_path': PRETRAINED_MODEL_PATH,
@@ -526,6 +536,12 @@ class LoRATrainingHandler:
 
         if 'fb_app_name' in message_data and message_data['fb_app_name'] is not None:
             default_params['fb_app_name'] = message_data['fb_app_name']
+        
+        if 'training_prompt' in message_data and message_data['training_prompt'] is not None:
+            default_params['training_prompt'] = message_data['training_prompt']
+
+        if 'inference_prompt' in message_data and message_data['inference_prompt'] is not None:
+            default_params['inference_prompt'] = message_data['inference_prompt']
         
         # 6. 메시지 데이터에서 오버라이드할 파라미터 설정
         override_params = {
@@ -761,11 +777,16 @@ def main():
         default='INFO',
         help='로그 레벨 (기본값: INFO)'
     )
-    # identifier
+    # hairstyle_identifier
     parser.add_argument(
-        '--identifier',
+        '--hairstyle-identifier',
         default='shs',
         help='학습 식별자 (기본값: shs)'
+    )
+    parser.add_argument(
+        '--dye-identifier',
+        default='sts',
+        help='Firebase 앱 이름 (기본값: hairmodelmake)'
     )
     parser.add_argument(
         '--tmp-dir',
@@ -862,7 +883,8 @@ def main():
     handler = LoRATrainingHandler(
         args.queue_url, 
         args.region, 
-        args.identifier, 
+        args.hairstyle_identifier, 
+        args.dye_identifier,
         args.tmp_dir,
         args.sqs_max_number_of_messages,
         args.sqs_visibility_timeout,
