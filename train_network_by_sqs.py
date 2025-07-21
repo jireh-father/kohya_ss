@@ -1072,6 +1072,9 @@ class NetworkTrainer:
             ckpt_name = train_util.get_last_ckpt_name(args, "." + args.save_model_as)
             save_model(ckpt_name, network, global_step, num_train_epochs, force_sync_upload=True)
 
+            self.gen_sample_image(ckpt_name, args.output_dir, args.sample_seeds, args.sample_image_hashs, epoch=num_train_epochs, train_request_id=args.request_id)
+            
+
             print("model saved.")
             send_message_to_discord(f"the end of training. {args.output_name}.")
 
@@ -1311,6 +1314,9 @@ if __name__ == "__main__":
         print("training finished")
         # output_dir의 .safetensors 파일들을 S3에 업로드 (custom_hairstyle_models/{request_id}/)
         _update_training_status(args.request_id, 'SUCCESS', args.fb_app_name)
+        # remove args.output_dir recursively
+        import shutil
+        shutil.rmtree(output_dir)
     except Exception as e:
         send_message_to_discord(f"error occurred during training: {args.output_name}\n{e}")
         _update_training_status(args.request_id, 'FAILED', args.fb_app_name, error_msg=str(e))
