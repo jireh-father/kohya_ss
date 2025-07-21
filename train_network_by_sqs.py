@@ -230,7 +230,10 @@ class NetworkTrainer:
                 params['image_hash'] = sample_image_hash
                 print(f"gen sample image params: {params}")
                 sqs.send_message(QueueUrl=SQS_URL_COMFYUI, MessageBody=json.dumps(params))
-                gen_urls.append(f"https://{S3_BUCKET_NAME}.s3.{REGION_NAME}.amazonaws.com/{S3_GEN_IMAGE_DIR}/{request_id}_0.jpg")
+                gen_urls.append({"gen_url":f"https://{S3_BUCKET_NAME}.s3.{REGION_NAME}.amazonaws.com/{S3_GEN_IMAGE_DIR}/{request_id}_0.jpg", 
+                                "model_s3_path":s3_key,
+                                "seed":sample_seed,
+                                "epoch":epoch})
         # save data to rdb, data is training epoch, training request_id, gen url, gen params etc
 
         #todo: rtdb event listener 생성해서 이미지 생성 완료되면 학습용 rtdb에 reuqest_id에 샘플 이미지 url 등록, timeout 도 필요함.
@@ -1317,6 +1320,7 @@ if __name__ == "__main__":
         # remove args.output_dir recursively
         import shutil
         shutil.rmtree(output_dir)
+        shutil.rmtree(output_dir.replace("/model", "/img"))
     except Exception as e:
         send_message_to_discord(f"error occurred during training: {args.output_name}\n{e}")
         _update_training_status(args.request_id, 'FAILED', args.fb_app_name, error_msg=str(e))
