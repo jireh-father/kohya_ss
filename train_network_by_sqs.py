@@ -1275,14 +1275,10 @@ def _update_training_status(request_id: str, status: str=None, fb_app_name: str=
             
 
             samples_dict = {}
-            if sample_epoch is not None:
-                if sample_image_urls is not None:
-                    samples_dict[str(sample_epoch)] = sample_image_urls
-                else:
-                    samples_dict[str(sample_epoch)] = None
-
+            if sample_image_urls is not None:
+                samples_dict[str(sample_epoch)] = sample_image_urls
             
-            if old_status_data is not None and 'samples' in old_status_data:
+            if old_status_data is not None and 'samples' in old_status_data and old_status_data['samples']:
                 print("samples_dict", samples_dict)
                 print("old_status_data['samples']", old_status_data['samples'])
                 samples_dict.update(old_status_data['samples'])
