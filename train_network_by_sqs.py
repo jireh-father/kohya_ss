@@ -1255,7 +1255,6 @@ def _update_training_status(request_id: str, status: str=None, fb_app_name: str=
                 ref = db.reference(f'train_status/{request_id}')
 
             old_status_data = ref.get()
-            print(f"old_status_data: {old_status_data}")
             if status is None and old_status_data is not None and 'status' in old_status_data:
                 status = old_status_data['status']
             
@@ -1277,9 +1276,6 @@ def _update_training_status(request_id: str, status: str=None, fb_app_name: str=
             samples_dict = {}
             if sample_image_urls is not None:
                 samples_dict[f"epoch_{str(sample_epoch)}"] = sample_image_urls if sample_epoch is not None else None
-            print("===sample_epoch", sample_epoch)
-            print("===samples_dict", samples_dict)
-            print("===old_status_data", old_status_data)
             
             if old_status_data is not None and 'samples' in old_status_data and old_status_data['samples']:
                 samples_dict.update(old_status_data['samples'])

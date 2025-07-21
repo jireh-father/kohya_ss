@@ -537,9 +537,6 @@ class LoRATrainingHandler:
         if 'fb_app_name' in message_data and message_data['fb_app_name'] is not None:
             default_params['fb_app_name'] = message_data['fb_app_name']
         
-        if 'training_prompt' in message_data and message_data['training_prompt'] is not None:
-            default_params['training_prompt'] = message_data['training_prompt']
-
         if 'inference_prompt' in message_data and message_data['inference_prompt'] is not None:
             default_params['inference_prompt'] = message_data['inference_prompt']
         
