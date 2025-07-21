@@ -1291,7 +1291,6 @@ def _update_training_status(request_id: str, status: str=None, fb_app_name: str=
             if samples_dict:
                 status_data['samples'] = samples_dict
 
-            print("===set status_data", status_data)
             ref.set(status_data)
             
             print(f"학습 상태 업데이트 완료 - request_id: {request_id}, status: {status}")
