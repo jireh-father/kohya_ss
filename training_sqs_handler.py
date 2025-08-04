@@ -856,7 +856,7 @@ def main():
     # sample_female_dye_image_hash
     parser.add_argument(
         '--sample-female-dye-image-hash',
-        default='71c5bc1e8840e6360f70399e610d01d9aa8d0d6c:::67c7b066583412fc1c607fc7fab8962009437b45:::c95b94131abda21cf9d3288665be5e45fc185323:::f999140e36038710706aea85f4bf41e6eaf9a83b',
+        default='71c5bc1e8840e6360f70399e610d01d9aa8d0d6c:::67c7b066583412fc1c607fc7fab8962009437b45:::c95b94131abda21cf9d3288665be5e45fc185323:::19c685e803fb17199c4b8aa5adfb13a5a4d0763a',
         help='샘플링 여성 염색 이미지 해시 (기본값: None)'
     )
     # sample_male_dye_image_hash
