@@ -408,7 +408,7 @@ class BlueprintGenerator:
     return default_value
 
 
-def generate_dataset_group_by_blueprint(dataset_group_blueprint: DatasetGroupBlueprint):
+def generate_dataset_group_by_blueprint(dataset_group_blueprint: DatasetGroupBlueprint, use_albu_augs: bool=False):
   datasets: List[Union[DreamBoothDataset, FineTuningDataset, ControlNetDataset]] = []
 
   for dataset_blueprint in dataset_group_blueprint.datasets:
@@ -423,7 +423,7 @@ def generate_dataset_group_by_blueprint(dataset_group_blueprint: DatasetGroupBlu
       dataset_klass = FineTuningDataset
 
     subsets = [subset_klass(**asdict(subset_blueprint.params)) for subset_blueprint in dataset_blueprint.subsets]
-    dataset = dataset_klass(subsets=subsets, **asdict(dataset_blueprint.params))
+    dataset = dataset_klass(subsets=subsets, **asdict(dataset_blueprint.params), use_albu_augs=use_albu_augs)
     datasets.append(dataset)
 
   # print info

@@ -1294,6 +1294,7 @@ class DreamBoothDataset(BaseDataset):
         prior_loss_weight: float,
         debug_dataset,
         is_controlnet=False,
+        use_albu_augs=False,
     ) -> None:
         super().__init__(tokenizer, max_token_length, resolution, debug_dataset, is_controlnet)
 
@@ -1303,6 +1304,8 @@ class DreamBoothDataset(BaseDataset):
         self.size = min(self.width, self.height)  # 短いほう
         self.prior_loss_weight = prior_loss_weight
         self.latents_cache = None
+
+        self.use_albu_augs = use_albu_augs
 
         self.enable_bucket = enable_bucket
         if self.enable_bucket:
