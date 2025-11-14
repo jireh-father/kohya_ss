@@ -441,27 +441,25 @@ class LoRATrainingHandler:
         
         # 2. S3에서 이미지 다운로드
         image_files = self._download_s3_images(s3_folder_path, dirs['img_dir'])
-        # import glob
-        # min_images = 7
-        # num_images = len(glob.glob(os.path.join(dirs['img_dir'], '*.jpg')))
-        # if num_images < min_images:
-        #     num_repeats = max(1, min_images // num_images)
-        #     if num_repeats * num_images < min_images:
-        #         num_repeats += 1
-        # else:
-        #     num_repeats = 1
-        # #rename dirs['image_dir'] to dirs['image_dir']_{num_repeats}
-        # if num_repeats > 1:
-        #     new_image_dir = os.path.join(os.path.dirname(dirs['img_dir']), f"{num_repeats}_{os.path.basename(dirs['img_dir']).split('_')[1]}")
-        #     os.rename(dirs['img_dir'], new_image_dir)
-        #     dirs['img_dir'] = new_image_dir
-        #     use_albu_augs = True
-        #     cache_latents = False
-        # else:
-        #     cache_latents = True
-        #     use_albu_augs = False
-        cache_latents = True
-        use_albu_augs = False
+        import glob
+        min_images = 7
+        num_images = len(glob.glob(os.path.join(dirs['img_dir'], '*.jpg')))
+        if num_images < min_images:
+            num_repeats = max(1, min_images // num_images)
+            if num_repeats * num_images < min_images:
+                num_repeats += 1
+        else:
+            num_repeats = 1
+        #rename dirs['image_dir'] to dirs['image_dir']_{num_repeats}
+        if num_repeats > 1:
+            new_image_dir = os.path.join(os.path.dirname(dirs['img_dir']), f"{num_repeats}_{os.path.basename(dirs['img_dir']).split('_')[1]}")
+            os.rename(dirs['img_dir'], new_image_dir)
+            dirs['img_dir'] = new_image_dir
+            use_albu_augs = True
+            cache_latents = False
+        else:
+            cache_latents = True
+            use_albu_augs = False
         
         if not image_files:
             raise ValueError(f"다운로드된 이미지가 없습니다: {s3_folder_path}")

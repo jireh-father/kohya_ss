@@ -136,9 +136,9 @@ ALBU_AUGS = A.Compose([
     ),
     A.HorizontalFlip(p=0.5),
     A.ColorJitter(
-        brightness=[0.9, 1.1],
-        contrast=[0.9, 1.1],
-        saturation=[0.9, 1.1],
+        brightness=[1., 1.1],
+        contrast=[1., 1.1],
+        saturation=[1., 1.1],
         hue=[-0.1, 0.1],
         p=0.5,
     ),
@@ -151,12 +151,12 @@ ALBU_AUGS = A.Compose([
     #     sigma_range=[0.2, 1],
     #     p=0.5,
     # ),
-    A.FancyPCA(
-        alpha=1,
-        p=0.5,
-    ),
+    # A.FancyPCA(
+    #     alpha=1,
+    #     p=0.5,
+    # ),
     A.RandomGamma(
-        gamma_limit=[80, 100],
+        gamma_limit=[100, 120],
         p=0.5,
     ),
     A.RandomToneCurve(
@@ -164,11 +164,11 @@ ALBU_AUGS = A.Compose([
         per_channel=False,
         p=0.5,
     ),
-    A.RandomBrightnessContrast(
-        brightness_limit=[0.1, 0.2],
-        contrast_limit=[0.1, 0.2],
-        p=0.5,
-    ),
+    # A.RandomBrightnessContrast(
+    #     brightness_limit=[0.1, 0.2],
+    #     contrast_limit=[0.1, 0.2],
+    #     p=0.5,
+    # ),
     # A.OneOf([
     #     # Use ranges for number/size of holes
     #     A.CoarseDropout(num_holes_range=(1, 8), hole_height_range=(0.1, 0.25),
