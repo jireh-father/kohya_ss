@@ -49,7 +49,7 @@ class LoRATrainingHandler:
                  sample_start_epoch: int = 100,
                  sample_female_hairstyle_image_hash: str = None, sample_male_hairstyle_image_hash: str = None,
                  sample_female_dye_image_hash: str = None, sample_male_dye_image_hash: str = None,
-                 num_gpus: int = 4):
+                 num_gpus: str = "0,1"):
         """
         SQS LoRA 학습 핸들러 초기화
         
@@ -89,7 +89,7 @@ class LoRATrainingHandler:
         self.sample_male_dye_image_hash = sample_male_dye_image_hash
         self.default_fb_app = None
         self.fb_app_hmm = None
-        self.num_gpus = num_gpus
+        self.num_gpus = num_gpus.split(',')
         self.current_gpu_idx = 0
         
     def _get_aws_credentials(self) -> tuple:
@@ -629,8 +629,10 @@ class LoRATrainingHandler:
             log_file = os.path.join(dirs['base_dir'], 'train.log')
             
             # 환경변수 설정
-            env_vars = f'CUDA_VISIBLE_DEVICES={self.current_gpu_idx}'
-            self.current_gpu_idx = (self.current_gpu_idx + 1) % self.num_gpus
+            env_vars = f'CUDA_VISIBLE_DEVICES={self.num_gpus[self.current_gpu_idx]}'
+            self.current_gpu_idx += 1
+            if self.current_gpu_idx >= len(self.num_gpus):
+                self.current_gpu_idx = 0
             if os.name == 'nt':
                 env_vars += ' PYTHONIOENCODING=utf-8 CHCP=65001'
             
@@ -890,9 +892,9 @@ def main():
     # num_gpus
     parser.add_argument(
         '--num-gpus',
-        default=4,
-        type=int,
-        help='사용할 GPU 수 (기본값: 1)'
+        default="0,1",
+        type=str,
+        help='사용할 GPU 수 (기본값: 0,1)'
     )
     args = parser.parse_args()
     
