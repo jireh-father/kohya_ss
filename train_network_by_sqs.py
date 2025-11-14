@@ -196,7 +196,7 @@ class NetworkTrainer:
             params['generator_type'] = "hairstyle_inpaint"
 
             params['hair_length'] = self.hair_length
-            if self.bangs == "bangs":
+            if self.bangs:
                 params['bangs'] = "see-through bangs"
             params['style_preset_name'] = ckpt_name
 
