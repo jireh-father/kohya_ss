@@ -449,7 +449,7 @@ class LoRATrainingHandler:
             num_repeats = 1
         #rename dirs['image_dir'] to dirs['image_dir']_{num_repeats}
         if num_repeats > 1:
-            new_image_dir = os.path.join(os.path.dirname(dirs['img_dir']), f"{num_repeats}_{os.path.basename(dirs['img_dir']).split("_")[1]}")
+            new_image_dir = os.path.join(os.path.dirname(dirs['img_dir']), f"{num_repeats}_{os.path.basename(dirs['img_dir']).split('_')[1]}")
             os.rename(dirs['img_dir'], new_image_dir)
             dirs['img_dir'] = new_image_dir
             use_albu_augs = True
