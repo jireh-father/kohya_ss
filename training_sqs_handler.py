@@ -442,9 +442,12 @@ class LoRATrainingHandler:
         # 2. S3에서 이미지 다운로드
         image_files = self._download_s3_images(s3_folder_path, dirs['img_dir'])
         import glob
+        min_images = 7
         num_images = len(glob.glob(os.path.join(dirs['img_dir'], '*.jpg')))
-        if num_images < 7:
-            num_repeats = max(1, 7 // num_images + 1)
+        if num_images < min_images:
+            num_repeats = max(1, min_images // num_images)
+            if num_repeats * num_images < min_images:
+                num_repeats += 1
         else:
             num_repeats = 1
         #rename dirs['image_dir'] to dirs['image_dir']_{num_repeats}
