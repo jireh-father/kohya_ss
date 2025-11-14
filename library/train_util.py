@@ -1173,6 +1173,8 @@ class BaseDataset(torch.utils.data.Dataset):
 
                 # todo albumentations augmentation
                 if self.use_albu_augs:
+                    if index == 0:
+                        print("used albumentations augmentation")
                     img = self.albu_augs(image=img)["image"]
 
                 if flipped:
