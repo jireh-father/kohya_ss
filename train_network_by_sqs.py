@@ -346,7 +346,7 @@ class NetworkTrainer:
                     }
 
             blueprint = blueprint_generator.generate(user_config, args, tokenizer=tokenizer)
-            train_dataset_group = config_util.generate_dataset_group_by_blueprint(blueprint.dataset_group, args.use_albu_augs)
+            train_dataset_group = config_util.generate_dataset_group_by_blueprint(blueprint.dataset_group, args.use_albu_augs if 'use_albu_augs' in args else False)
         else:
             # use arbitrary dataset class
             train_dataset_group = train_util.load_arbitrary_dataset(args, tokenizer)

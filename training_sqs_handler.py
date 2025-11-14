@@ -270,10 +270,11 @@ class LoRATrainingHandler:
         """
         base_dir = os.path.join(self.tmp_dir, request_id)
         identifier = self.hairstyle_identifier if style_type == 'hairstyle' else self.dye_identifier
+        num_repeats = 1
         if gender == 'female':
-            img_dir = os.path.join(base_dir, 'img', f'1_{identifier} woman')
+            img_dir = os.path.join(base_dir, 'img', f'{num_repeats}_{identifier} woman')
         else:
-            img_dir = os.path.join(base_dir, 'img', f'1_{identifier} man')
+            img_dir = os.path.join(base_dir, 'img', f'{num_repeats}_{identifier} man')
         log_dir = os.path.join(base_dir, 'log')
         model_dir = os.path.join(base_dir, 'model')
         
@@ -440,6 +441,22 @@ class LoRATrainingHandler:
         
         # 2. S3에서 이미지 다운로드
         image_files = self._download_s3_images(s3_folder_path, dirs['img_dir'])
+        import glob
+        num_images = len(glob.glob(os.path.join(dirs['img_dir'], '*.jpg')))
+        if num_images < 7:
+            num_repeats = max(1, 7 // num_images + 1)
+        else:
+            num_repeats = 1
+        #rename dirs['image_dir'] to dirs['image_dir']_{num_repeats}
+        if num_repeats > 1:
+            new_image_dir = os.path.join(os.path.dirname(dirs['img_dir']), f"{num_repeats}_{os.path.basename(dirs['img_dir']).split("_")[1]}")
+            os.rename(dirs['img_dir'], new_image_dir)
+            dirs['img_dir'] = new_image_dir
+            use_albu_augs = True
+            cache_latents = False
+        else:
+            cache_latents = True
+            use_albu_augs = False
         
         if not image_files:
             raise ValueError(f"다운로드된 이미지가 없습니다: {s3_folder_path}")
@@ -505,7 +522,7 @@ class LoRATrainingHandler:
             'save_every_n_epochs': 50 if 'save_every_n_epochs' not in message_data else int(message_data['save_every_n_epochs']),
             'mixed_precision': 'fp16',
             'save_precision': 'fp16',
-            'cache_latents': True,
+            'cache_latents': cache_latents,
             'optimizer_type': 'AdamW8bit',
             'max_data_loader_n_workers': 0,
             'bucket_reso_steps': 64,
@@ -532,6 +549,7 @@ class LoRATrainingHandler:
             'hair_length': hair_length,
             'bangs': bangs,
             'gender': gender,
+            'use_albu_augs': use_albu_augs,
         }
 
         if 'fb_app_name' in message_data and message_data['fb_app_name'] is not None:

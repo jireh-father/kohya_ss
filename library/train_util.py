@@ -64,6 +64,7 @@ from library.lpw_stable_diffusion import StableDiffusionLongPromptWeightingPipel
 import library.model_util as model_util
 import library.huggingface_util as huggingface_util
 import library.sai_model_spec as sai_model_spec
+import albumentations as A
 
 # from library.attention_processors import FlashAttnProcessor
 # from library.hypernetwork import replace_attentions_for_hypernetwork
@@ -104,6 +105,80 @@ IMAGE_TRANSFORMS = transforms.Compose(
         transforms.Normalize([0.5], [0.5]),
     ]
 )
+
+ALBU_AUGS = A.Compose([
+    A.Perspective(
+        scale=[0, 0.02],
+        keep_size=True,
+        fit_output=False,
+        interpolation=cv2.INTER_LINEAR,
+        mask_interpolation=cv2.INTER_NEAREST,
+        border_mode=cv2.BORDER_REFLECT,
+        fill=0,
+        fill_mask=0,
+        p=0.5,
+    ),
+    A.Affine(
+        scale=[0.9, 1.1],
+        translate_percent=[-0.05, 0.05],
+        rotate=[-15, 15],
+        shear=[-2, 2],
+        interpolation=cv2.INTER_LINEAR,
+        mask_interpolation=cv2.INTER_NEAREST,
+        fit_output=False,
+        keep_ratio=True,
+        rotate_method="ellipse",
+        balanced_scale=True,
+        border_mode=cv2.BORDER_REFLECT,
+        fill=0,
+        fill_mask=0,
+        p=0.5,
+    ),
+    A.HorizontalFlip(p=0.5),
+    A.ColorJitter(
+        brightness=[0.9, 1.1],
+        contrast=[0.9, 1.1],
+        saturation=[0.9, 1.1],
+        hue=[-0.1, 0.1],
+        p=0.5,
+    ),
+    # A.Illumination(
+    #     mode="linear",
+    #     intensity_range=[0.1, 0.2],
+    #     effect_type="both",
+    #     angle_range=[0, 360],
+    #     center_range=[0.1, 0.9],
+    #     sigma_range=[0.2, 1],
+    #     p=0.5,
+    # ),
+    A.FancyPCA(
+        alpha=1,
+        p=0.5,
+    ),
+    A.RandomGamma(
+        gamma_limit=[80, 100],
+        p=0.5,
+    ),
+    A.RandomToneCurve(
+        scale=0.1,
+        per_channel=False,
+        p=0.5,
+    ),
+    A.RandomBrightnessContrast(
+        brightness_limit=[0.1, 0.2],
+        contrast_limit=[0.1, 0.2],
+        p=0.5,
+    ),
+    # A.OneOf([
+    #     # Use ranges for number/size of holes
+    #     A.CoarseDropout(num_holes_range=(1, 8), hole_height_range=(0.1, 0.25),
+    #                     hole_width_range=(0.1, 0.25), fill_value=0, p=1.0),
+    #     # Use ratio and unit size range for grid
+    #     A.GridDropout(ratio=0.5, unit_size_range=(0.1, 0.2), p=1.0)
+    # ], p=0.5), # Apply one of the dropouts 50% of the time
+    # ... other transforms ...
+])
+
 
 TEXT_ENCODER_OUTPUTS_CACHE_SUFFIX = "_te_outputs.npz"
 
@@ -394,6 +469,8 @@ class DreamBoothSubset(BaseSubset):
             token_warmup_step,
         )
 
+        print("dreamboot dataset init, num_repeats", num_repeats)
+
         self.is_reg = is_reg
         self.class_tokens = class_tokens
         self.caption_extension = caption_extension
@@ -506,6 +583,7 @@ class BaseDataset(torch.utils.data.Dataset):
         resolution: Optional[Tuple[int, int]],
         debug_dataset: bool,
         is_controlnet: bool=False,
+        use_albu_augs: bool=False,
     ) -> None:
         super().__init__()
 
@@ -543,6 +621,7 @@ class BaseDataset(torch.utils.data.Dataset):
         self.aug_helper = AugHelper()
 
         self.image_transforms = IMAGE_TRANSFORMS
+        self.albu_augs = ALBU_AUGS
 
         self.image_data: Dict[str, ImageInfo] = {}
         self.image_to_subset: Dict[str, Union[DreamBoothSubset, FineTuningSubset]] = {}
@@ -553,6 +632,7 @@ class BaseDataset(torch.utils.data.Dataset):
         self.caching_mode = None  # None, 'latents', 'text'
 
         self.is_controlnet = is_controlnet
+        self.use_albu_augs = use_albu_augs
 
     def set_seed(self, seed):
         self.seed = seed
@@ -1091,6 +1171,10 @@ class BaseDataset(torch.utils.data.Dataset):
                 if aug is not None:
                     img = aug(image=img)["image"]
 
+                # todo albumentations augmentation
+                if self.use_albu_augs:
+                    img = self.albu_augs(image=img)["image"]
+
                 if flipped:
                     img = img[:, ::-1, :].copy()  # copy to avoid negative stride problem
 
@@ -1296,7 +1380,7 @@ class DreamBoothDataset(BaseDataset):
         is_controlnet=False,
         use_albu_augs=False,
     ) -> None:
-        super().__init__(tokenizer, max_token_length, resolution, debug_dataset, is_controlnet)
+        super().__init__(tokenizer, max_token_length, resolution, debug_dataset, is_controlnet, use_albu_augs)
 
         assert resolution is not None, f"resolution is required / resolution（解像度）指定は必須です"
 
@@ -1304,8 +1388,6 @@ class DreamBoothDataset(BaseDataset):
         self.size = min(self.width, self.height)  # 短いほう
         self.prior_loss_weight = prior_loss_weight
         self.latents_cache = None
-
-        self.use_albu_augs = use_albu_augs
 
         self.enable_bucket = enable_bucket
         if self.enable_bucket:
