@@ -586,8 +586,9 @@ class LoRATrainingHandler:
         # else:
         # 일반적인 경우
         for key, value in params.items():
-            if isinstance(value, bool) and value == True:
-                cmd.append(f'--{key}')
+            if isinstance(value, bool):
+                if value == True:
+                    cmd.append(f'--{key}')
             else:
                 # 경로를 정규화하여 슬래시 사용
                 if 'dir' in key.lower() and isinstance(value, str):
